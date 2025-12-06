@@ -16,9 +16,17 @@ Including another URLconf
 """
 
 from django.contrib import admin
-from django.urls import path,include
+from django.urls import path, include
 
 urlpatterns = [
+    # Admin panel
     path("admin/", admin.site.urls),
-    path("account/", include("accounts.urls")),
+
+    # Auth routes: only login/logout
+    # Using namespace 'auth' for reverse lookups: auth:login, auth:logout
+    path('auth/', include(('accounts.urls', 'accounts'), namespace='auth')),
+
+    # Account routes: registration, profile, etc.
+    # Namespace 'accounts' for reverse lookups: accounts:register, accounts:profile
+    path('account/', include(('accounts.urls', 'accounts'), namespace='accounts')),
 ]

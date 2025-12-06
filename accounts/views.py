@@ -20,7 +20,7 @@ class RegisterView(generics.CreateAPIView):
 
 
 class LoginView(APIView):
-    """POST /account/login/ - authenticate user and return token"""
+    """POST /auth/login/ - authenticate user and return token"""
     permission_classes = [permissions.AllowAny]
 
     def post(self, request):
@@ -40,7 +40,7 @@ class LoginView(APIView):
 
 
 class LogoutView(APIView):
-    """POST /account/logout/ - delete user's token"""
+    """POST /auth/logout/ - delete user's token"""
     authentication_classes = [TokenAuthentication]
     permission_classes = [permissions.IsAuthenticated]
 
