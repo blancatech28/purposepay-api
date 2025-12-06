@@ -42,7 +42,14 @@ INSTALLED_APPS = [
     "rest_framework",
     "rest_framework.authtoken",
     "corsheaders",
+    "accounts",   # Custom user app
 ]
+
+AUTH_USER_MODEL = "accounts.CustomUser" 
+AUTHENTICATION_BACKENDS = [
+    'accounts.backends.EmailBackend',
+    'django.contrib.auth.backends.ModelBackend',
+] # Allow authentication with email 
 
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
