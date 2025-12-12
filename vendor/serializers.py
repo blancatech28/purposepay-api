@@ -1,49 +1,177 @@
 # vendor/serializers.py
+import re
 from rest_framework import serializers
 from .models import VendorProfile
 
-
-# Serializer for reading vendor profile (GET)
-class VendorProfileReadSerializer(serializers.ModelSerializer):
+# -------------------------------
+# Vendor Read Serializer (vendor view)
+# -------------------------------
+class VendorReadSerializer(serializers.ModelSerializer):
     """
-    Serializer for viewing vendor profiles.
-    All fields are read-only.
+    Serializer for vendors to view their full profile.
+    Includes sensitive info like balance, payout info, and uploaded documents.
     """
     user_email = serializers.EmailField(source='user.email', read_only=True)
 
     class Meta:
         model = VendorProfile
         fields = [
-            'id',
-            'user_email',
-            'business_name',
-            'category',
-            'status',
-            'admin_approved_date',
-            'balance',
-            'payout_account_number',
-            'payout_bank_name',
+            'id', 'user_email', 'business_name', 'category', 'status',
+            'admin_approved_date', 'phone_number', 'country', 'city',
+            'business_address', 'gps_code', 'balance', 'payout_account_number',
+            'payout_bank_name', 'owner_id_type', 'owner_id_document',
+            'business_registration_document', 'business_location_image',
         ]
-        read_only_fields = fields  # Everything is read-only
+        read_only_fields = fields
 
 
-# Serializer for vendor create/update (POST/PUT)
-class VendorProfileWriteSerializer(serializers.ModelSerializer):
+# -------------------------------
+# Public Read Serializer (customer view)
+# -------------------------------
+class VendorPublicReadSerializer(serializers.ModelSerializer):
     """
-    Serializer for vendor updating their own profile.
-    Allows editing business info and payout details.
+    Serializer for customers or other users to view vendor info.
+    Excludes sensitive data like balance, payout info, and documents.
     """
     class Meta:
         model = VendorProfile
         fields = [
-            'business_name',
-            'category',
-            'payout_account_number',
-            'payout_bank_name',
+            'id', 'business_name', 'category', 'phone_number', 'country',
+            'city', 'business_address', 'gps_code', 'business_location_image',
+        ]
+        read_only_fields = fields
+
+
+# -------------------------------
+# Vendor Create Serializer
+# -------------------------------
+class VendorProfileCreateSerializer(serializers.ModelSerializer):
+    """
+    Serializer for vendor profile creation.
+    All required fields must be provided including documents and GPS.
+    """
+    class Meta:
+        model = VendorProfile
+        fields = [
+            'business_name', 'category', 'phone_number', 'city',
+            'business_address', 'gps_code', 'payout_account_number',
+            'payout_bank_name', 'owner_id_type', 'owner_id_document',
+            'business_registration_document', 'business_location_image',
         ]
 
 
+    # Constants for file size limits
+    MAX_IMAGE_SIZE = 5 * 1024 * 1024  # 5MB
+    MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
+
+    # -------------------------------
+    # Field Validations
+    # -------------------------------
+    def validate_gps_code(self, value):
+        pattern = r"^[A-Z]{2}-\d{4}-\d{4}$"
+        if not re.match(pattern, value):
+            raise serializers.ValidationError(
+                "GPS code must be in format XX-0000-0000 (e.g., GW-0065-1601)."
+            )
+        return value
+
+    def validate_phone_number(self, value):
+        pattern = r"^(?:\+233|0)\d{9}$"
+        if not re.match(pattern, value):
+            raise serializers.ValidationError(
+                "Phone number must be Ghanaian format: +233XXXXXXXXX or 0XXXXXXXXX."
+            )
+        return value
+
+    def validate_city(self, value):
+        if not value.strip():
+            raise serializers.ValidationError("City cannot be empty.")
+        return value
+
+    def validate_payout_account_number(self, value):
+        if not value.isdigit():
+            raise serializers.ValidationError("Account number must contain only digits.")
+        if len(value) < 10 or len(value) > 18:
+            raise serializers.ValidationError("Account number length seems invalid.")
+        return value
+
+    def validate_payout_bank_name(self, value):
+        if not value.strip():
+            raise serializers.ValidationError("Bank name cannot be empty.")
+        return value
+
+    # -------------------------------
+    # File / Image Validations
+    # -------------------------------
+    def validate_owner_id_document(self, value):
+        allowed = ('.pdf', '.doc', '.docx', '.jpg', '.png')
+        if not value.name.lower().endswith(allowed):
+            raise serializers.ValidationError("Owner ID must be PDF, DOC/DOCX, or image file.")
+        if value.size > self.MAX_FILE_SIZE:
+            raise serializers.ValidationError("File too large (max 10MB).")
+        return value
+
+    def validate_business_registration_document(self, value):
+        allowed = ('.pdf', '.doc', '.docx')
+        if not value.name.lower().endswith(allowed):
+            raise serializers.ValidationError("Business registration must be PDF or DOC/DOCX file.")
+        if value.size > self.MAX_FILE_SIZE:
+            raise serializers.ValidationError("File too large (max 10MB).")
+        return value
+
+    def validate_business_location_image(self, value):
+        allowed = ('.jpg', '.jpeg', '.png')
+        if not value.name.lower().endswith(allowed):
+            raise serializers.ValidationError("Business location image must be JPG or PNG.")
+        if value.size > self.MAX_IMAGE_SIZE:
+            raise serializers.ValidationError("Image too large (max 5MB).")
+        return value
+
+
+# -------------------------------
+# Vendor Update Serializer
+# -------------------------------
+class VendorProfileUpdateSerializer(serializers.ModelSerializer):
+    """
+    Serializer for vendors to update only allowed fields after approval.
+    Cannot change verification documents or immutable fields.
+    """
+    class Meta:
+        model = VendorProfile
+        fields = [
+            'phone_number', 'payout_account_number', 'payout_bank_name',
+            'city', 'business_address',
+        ]
+
+    def validate_phone_number(self, value):
+        pattern = r"^(?:\+233|0)\d{9}$"
+        if not re.match(pattern, value):
+            raise serializers.ValidationError(
+                "Phone number must be Ghanaian format: +233XXXXXXXXX or 0XXXXXXXXX."
+            )
+        return value
+
+    def validate_payout_account_number(self, value):
+        if not value.isdigit():
+            raise serializers.ValidationError("Account number must contain only digits.")
+        if len(value) < 10 or len(value) > 18:
+            raise serializers.ValidationError("Account number length seems invalid.")
+        return value
+
+    def validate_payout_bank_name(self, value):
+        if not value.strip():
+            raise serializers.ValidationError("Bank name cannot be empty.")
+        return value
+
+    def validate_city(self, value):
+        if not value.strip():
+            raise serializers.ValidationError("City cannot be empty.")
+        return value
+
+
+# -------------------------------
 # Admin Serializer
+# -------------------------------
 class VendorAdminSerializer(serializers.ModelSerializer):
     """
     Admin operations on vendor profiles.
@@ -55,33 +183,17 @@ class VendorAdminSerializer(serializers.ModelSerializer):
     class Meta:
         model = VendorProfile
         fields = [
-            'id',
-            'user_email',
-            'business_name',
-            'category',
-            'status',
-            'admin_approved_date',
-            'last_modified_by',
-            'balance',
-            'payout_account_number',
-            'payout_bank_name',
+            'id', 'user_email', 'business_name', 'category', 'status',
+            'admin_approved_date', 'last_modified_by', 'balance',
+            'payout_account_number', 'payout_bank_name',
         ]
         read_only_fields = [
-            'user_email',
-            'business_name',
-            'category',
-            'admin_approved_date',
-            'last_modified_by',
-            'balance',
-            'payout_account_number',
+            'user_email', 'business_name', 'category', 'admin_approved_date',
+            'last_modified_by', 'balance', 'payout_account_number',
             'payout_bank_name',
         ]
 
     def update(self, instance, validated_data):
-        """
-        Only allow admin to update status.
-        Automatically set admin_approved_date and last_modified_by if approved/rejected.
-        """
         new_status = validated_data.get('status', instance.status)
         if new_status != instance.status:
             instance.status = new_status
@@ -91,21 +203,17 @@ class VendorAdminSerializer(serializers.ModelSerializer):
         return instance
 
 
+
+
+
 # Payout Serializer
 class VendorPayoutSerializer(serializers.Serializer):
     """
     Handles simulated vendor payout requests.
     """
-    amount = serializers.DecimalField(
-        max_digits=12,
-        decimal_places=2,
-        help_text="Amount vendor wants to withdraw from balance."
-    )
+    amount = serializers.DecimalField(max_digits=12, decimal_places=2, help_text="Amount vendor wants to withdraw.")
 
     def validate_amount(self, value):
-        """
-        Ensure amount is positive and does not exceed current balance.
-        """
         vendor_profile = self.context.get('vendor_profile')
         if value <= 0:
             raise serializers.ValidationError("Amount must be greater than zero.")
