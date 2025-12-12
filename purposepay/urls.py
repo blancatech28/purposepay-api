@@ -29,4 +29,7 @@ urlpatterns = [
     # Account routes: registration, profile, etc.
     # Namespace 'accounts' for reverse lookups: accounts:register, accounts:profile
     path('account/', include(('accounts.urls', 'accounts'), namespace='accounts')),
-]
+
+    # Vendor routes
+    path('vendor/', include(('vendor.urls', 'vendor'), namespace='vendor')),
+]   
