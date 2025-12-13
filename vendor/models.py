@@ -20,7 +20,7 @@ class VendorProfile(models.Model):
 
 #-------------------------
     # Business Details
-#-------------------------
+#--------------------------
     business_name = models.CharField(max_length=255, unique=True)
 
     PHARMACY = "PHARMACY"
