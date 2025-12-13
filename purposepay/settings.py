@@ -13,6 +13,16 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 from pathlib import Path
 from decouple import config
 
+import os
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))  
+BASE_DIR = os.path.dirname(BASE_DIR)                  
+
+VENDOR_ID_DIR = os.path.join(BASE_DIR, 'vendor_ids')
+VENDOR_CERT_DIR = os.path.join(BASE_DIR, 'vendor_certificates')
+VENDOR_LOCATION_DIR = os.path.join(BASE_DIR, 'vendor_locations')
+
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 

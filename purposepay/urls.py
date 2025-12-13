@@ -17,6 +17,9 @@ Including another URLconf
 
 from django.contrib import admin
 from django.urls import path, include
+from django.conf import settings
+from django.urls import re_path
+from django.views.static import serve
 
 urlpatterns = [
     # Admin panel
@@ -32,4 +35,13 @@ urlpatterns = [
 
     # Vendor routes
     path('vendor/', include(('vendor.urls', 'vendor'), namespace='vendor')),
-]   
+
+] 
+
+# Serving static files for vendor-related documents
+urlpatterns += [
+    re_path(r'^vendor_ids/(?P<path>.*)$', serve, {'document_root': settings.VENDOR_ID_DIR}),
+    re_path(r'^vendor_certificates/(?P<path>.*)$', serve, {'document_root': settings.VENDOR_CERT_DIR}),
+    re_path(r'^vendor_locations/(?P<path>.*)$', serve, {'document_root': settings.VENDOR_LOCATION_DIR}),
+]
+

@@ -85,6 +85,16 @@ target/
 profile_default/
 ipython_config.py
 
+
+# vendor specific ignores
+#  These folders may contain sensitive information or large files that should not be
+#  committed to version control. Adjust according to your project's needs.
+vendor_api_keys/
+vendor_certificates/
+vendor_ids/
+vendor_locations/
+
+
 # pyenv
 #   For a library or package, you might want to ignore these files since the code is
 #   intended to run in multiple environments; otherwise, check them in:

@@ -8,6 +8,7 @@ from .views import (
     VendorPayoutView,VendorApproveView,VendorRejectView,
 )
 
+
 urlpatterns = [
     # Vendor self profile endpoint
     path('me/', VendorSelfView.as_view(), name='vendor-self'),
@@ -30,3 +31,6 @@ urlpatterns = [
     # Vendor payout endpoint
     path('payout/', VendorPayoutView.as_view(), name='vendor-payout'),
 ]
+
+
+
