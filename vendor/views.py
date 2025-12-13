@@ -1,6 +1,7 @@
 # vendor/views.py
 
 from rest_framework import generics, permissions, status
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 from .models import VendorProfile
 from .serializers import (
@@ -11,6 +12,7 @@ from .serializers import (
 from .permissions import IsVendorOwner
 from rest_framework.views import APIView
 from django.utils import timezone
+from rest_framework.exceptions import NotFound
 
 
 # Vendor view (authenticated vendor)
@@ -24,7 +26,11 @@ class VendorSelfView(generics.RetrieveUpdateAPIView):
 
     def get_object(self):
         # get the logged in vendor's profile
-        return self.request.user.vendor_profile
+        user = self.request.user
+        try:
+            return user.vendor_profile
+        except VendorProfile.DoesNotExist:
+            raise NotFound("No vendor profile found for this user.")
 
     def get_serializer_class(self):
         if self.request.method in ['PUT', 'PATCH']:
@@ -43,9 +49,7 @@ class VendorCreateView(generics.CreateAPIView):
         user = self.request.user
         # check if user is flagged as vendor
         if not getattr(user, 'is_vendor', False):
-            raise permissions.PermissionDenied(
-                "You need to be a vendor to create a vendor profile."
-            )
+            raise PermissionDenied("You need to be a vendor to create a vendor profile.")
         serializer.save(user=user)
 
 
@@ -89,17 +93,25 @@ class VendorAdminDetailView(generics.RetrieveUpdateAPIView):
 class VendorPayoutView(generics.GenericAPIView):
     serializer_class = VendorPayoutSerializer
     permission_classes = [permissions.IsAuthenticated, IsVendorOwner]
-
+    
     def post(self, request, *args, **kwargs):
-        vendor = request.user.vendor_profile
+        # Get the vendor profile safely
+        vendor = getattr(request.user, 'vendor_profile', None)
+        if not vendor:
+            return Response(
+                {"error": "You must be a vendor to access this endpoint."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
         serializer = self.get_serializer(
             data=request.data,
             context={'vendor_profile': vendor}
         )
         serializer.is_valid(raise_exception=True)
 
-        # subtract the requested amount from the available balance
+         # Subtract the requested amount from the available balance
         amount = serializer.validated_data['amount']
+
         vendor.balance -= amount
         vendor.save()
 
@@ -107,7 +119,7 @@ class VendorPayoutView(generics.GenericAPIView):
             {"message": f"Successfully processed payment of GH₵{amount}."},
             status=status.HTTP_200_OK
         )
-    
+
 
 # Admin approve/reject views
 class VendorApproveView(APIView):
