@@ -54,6 +54,7 @@ INSTALLED_APPS = [
     "corsheaders",
     "accounts",   # Custom user app
     "vendor",     # Vendor app
+    "voucher",    # Voucher app
 ]
 
 AUTH_USER_MODEL = "accounts.CustomUser" 
