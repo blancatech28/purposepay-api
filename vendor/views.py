@@ -3,7 +3,7 @@
 from rest_framework import generics, permissions, status
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
-from .models import VendorProfile
+from .models import VendorProfile, VendorVerification
 from .serializers import (
     VendorReadSerializer, VendorPublicReadSerializer,
     VendorProfileCreateSerializer, VendorProfileUpdateSerializer,
@@ -38,7 +38,6 @@ class VendorSelfView(generics.RetrieveUpdateAPIView):
         return VendorReadSerializer
 
 
-
 # Vendor profile creation view (user must be flagged as vendor)
 class VendorCreateView(generics.CreateAPIView):
     queryset = VendorProfile.objects.all()
@@ -55,18 +54,16 @@ class VendorCreateView(generics.CreateAPIView):
 
 # Public vendor list and retrieve views for customers (NO anonymous access)
 class VendorPublicListView(generics.ListAPIView):
-    queryset = VendorProfile.objects.filter(status=VendorProfile.APPROVED)
+    queryset = VendorProfile.objects.filter(verification__status=VendorVerification.APPROVED)
     serializer_class = VendorPublicReadSerializer
     permission_classes = [permissions.IsAuthenticated]
-
 
 
 class VendorPublicDetailView(generics.RetrieveAPIView):
     """Show details of a single approved vendor."""
-    queryset = VendorProfile.objects.filter(status=VendorProfile.APPROVED)
+    queryset = VendorProfile.objects.filter(verification__status=VendorVerification.APPROVED)
     serializer_class = VendorPublicReadSerializer
     permission_classes = [permissions.IsAuthenticated]
-
 
 
 # Admin vendor views
@@ -78,7 +75,7 @@ class VendorAdminListView(generics.ListAPIView):
         qs = VendorProfile.objects.all()
         status_filter = self.request.query_params.get('status')
         if status_filter:
-            qs = qs.filter(status=status_filter.upper())
+            qs = qs.filter(verification__status=status_filter.upper())
         return qs
 
 
@@ -112,8 +109,8 @@ class VendorPayoutView(generics.GenericAPIView):
          # Subtract the requested amount from the available balance
         amount = serializer.validated_data['amount']
 
-        vendor.balance -= amount
-        vendor.save()
+        vendor.finance.balance -= amount
+        vendor.finance.save()
 
         return Response(
             {"message": f"Successfully processed payment of GH₵{amount}."},
@@ -121,7 +118,10 @@ class VendorPayoutView(generics.GenericAPIView):
         )
 
 
+#---------------------------
 # Admin approve/reject views
+#---------------------------
+
 class VendorApproveView(APIView):
     permission_classes = [permissions.IsAdminUser]
 
@@ -131,10 +131,10 @@ class VendorApproveView(APIView):
         except VendorProfile.DoesNotExist:
             return Response({"error": "Vendor not found."}, status=404)
 
-        vendor.status = VendorProfile.APPROVED
-        vendor.admin_approved_date = timezone.now()
-        vendor.last_modified_by = request.user
-        vendor.save()
+        vendor.verification.status = VendorVerification.APPROVED
+        vendor.verification.admin_approved_date = timezone.now()
+        vendor.verification.last_modified_by = request.user
+        vendor.verification.save()
 
         return Response(
             {"message": f"Vendor {vendor.business_name} approved."},
@@ -151,12 +151,59 @@ class VendorRejectView(APIView):
         except VendorProfile.DoesNotExist:
             return Response({"error": "Vendor not found."}, status=404)
 
-        vendor.status = VendorProfile.REJECTED
-        vendor.admin_approved_date = timezone.now()
-        vendor.last_modified_by = request.user
-        vendor.save()
+        vendor.verification.status = VendorVerification.REJECTED
+        vendor.verification.admin_approved_date = timezone.now()
+        vendor.verification.last_modified_by = request.user
+        vendor.verification.save()
 
         return Response(
             {"message": f"Vendor {vendor.business_name} rejected."},
             status=200
         )
+    
+
+
+# Temporary view for topping up vendor balance (for testing purposes)
+# vendor/views.py
+from decimal import Decimal, InvalidOperation
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from rest_framework.permissions import IsAuthenticated
+
+class VendorTopUpView(APIView):
+    """
+    Temporary endpoint for testing: top up vendor balance.
+    Only for testing purposes.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        amount = request.data.get("amount")
+        if amount is None:
+            return Response({"error": "Amount is required."}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Convert to Decimal safely
+        try:
+            amount = Decimal(str(amount))
+        except (InvalidOperation, ValueError):
+            return Response({"error": "Amount must be a valid number."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if amount <= 0:
+            return Response({"error": "Amount must be greater than zero."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Get the vendor profile
+        try:
+            vendor_profile = request.user.vendor_profile
+        except AttributeError:
+            return Response({"error": "Vendor profile not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        # Add the top-up amount
+        vendor_profile.finance.balance += amount
+        vendor_profile.finance.save()
+
+        return Response({
+            "message": "Balance topped up successfully.",
+            "new_balance": str(vendor_profile.finance.balance)  # Return as string to avoid JSON Decimal issues
+        }, status=status.HTTP_200_OK)
+

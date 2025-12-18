@@ -4,10 +4,7 @@ from django.conf import settings
 
 
 class VendorProfile(models.Model):
-    """
-    Stores detailed profile information for users identified as Vendors.
-    Includes verification documents, business info, simulated balance, and payout info.
-    """
+    """Stores the core identity info of the vendor."""
 
     # Relationship to User (1:1)
     user = models.OneToOneField(
@@ -17,30 +14,13 @@ class VendorProfile(models.Model):
     )
 
 
-
-#-------------------------
-    # Business Details
-#--------------------------
     business_name = models.CharField(max_length=255, unique=True)
 
-    PHARMACY = "PHARMACY"
-    SCHOOL = "SCHOOL"
-    HARDWARE = "HARDWARE"
-    OTHER = "OTHER"
-
-    CATEGORY_CHOICES = [
-        (PHARMACY, "Pharmacy"),
-        (SCHOOL, "School"),
-        (HARDWARE, "Hardware Store"),
-        (OTHER, "Other"),
-    ]
-
-    category = models.CharField(max_length=50, choices=CATEGORY_CHOICES, default=OTHER)
-
-    # Contact information
+    
     phone_number = models.CharField(
         max_length=20,
-        help_text="Official business phone number."
+        help_text="Official business phone number.",
+        unique=True
     )
 
     # Country (hardcoded to Ghana for now)
@@ -61,15 +41,57 @@ class VendorProfile(models.Model):
         help_text="Physical business address (e.g., Ghana Post address)."
     )
 
+    # GPS Code (e.g., Ghana Post GPS code)
     gps_code = models.CharField(
         max_length=20,
         help_text="GPS code (e.g., GW-0062-1604). Must be provided."
     )
 
 
+    PHARMACY = "PHARMACY"
+    SCHOOL = "SCHOOL"
+    HARDWARE = "HARDWARE"
+    OTHER = "OTHER"
+
+    CATEGORY_CHOICES = [
+        (PHARMACY, "Pharmacy"),
+        (SCHOOL, "School"),
+        (HARDWARE, "Hardware Store"),
+        (OTHER, "Other"),
+    ]
+
+    category = models.CharField(max_length=50, choices=CATEGORY_CHOICES, default=OTHER)
 
 
-    # Verification Documents
+
+    # String Representation
+    def __str__(self):
+        return f"{self.business_name}"
+
+    class Meta:
+        verbose_name = 'Vendor Profile'
+        verbose_name_plural = 'Vendor Profiles'
+
+
+
+class VendorVerification(models.Model):
+    """
+    This model stores the verification documents and approval status for Vendors.
+    """
+
+    # Relationship to VendorProfile (1:1)
+    vendor = models.OneToOneField(
+        VendorProfile,
+        on_delete=models.CASCADE,
+        related_name='verification'
+    )
+
+
+
+#------------------------
+    #Verification Documents
+#--------------------------
+
     GHANA_CARD = "GHANA_CARD"
     PASSPORT = "PASSPORT"
     DRIVERS_LICENSE = "DRIVERS_LICENSE"
@@ -103,10 +125,7 @@ class VendorProfile(models.Model):
         help_text="Photo of the business physical location."
     )
 
-
-
-
-    # Status & Audit Fields
+    # Status and Approval Info
     PENDING = "PENDING"
     APPROVED = "APPROVED"
     REJECTED = "REJECTED"
@@ -128,18 +147,35 @@ class VendorProfile(models.Model):
     )
 
 
-
-    # Payment Simulation Fields
-    balance = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
-    payout_account_number = models.CharField(max_length=50)
-    payout_bank_name = models.CharField(max_length=100)
-
-    
-    # String Representation
     def __str__(self):
-        return f"{self.business_name} ({self.status}) - Balance: ${self.balance}"
+        return f"{self.vendor.business_name} ({self.status})"
 
     class Meta:
-        verbose_name = 'Vendor Profile'
-        verbose_name_plural = 'Vendor Profiles'
+        verbose_name = 'Vendor Verification'
+        verbose_name_plural = 'Vendor Verifications'
 
+
+
+class VendorFinance(models.Model):
+    """Table for financial and payout-related info of Vendors."""
+
+    # Relationship to VendorProfile (1:1)
+    vendor = models.OneToOneField(
+        VendorProfile,
+        on_delete=models.CASCADE,
+        related_name='finance'
+    )
+
+
+    balance = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
+    payout_account_number = models.CharField(max_length=50, unique=True)
+    payout_bank_name = models.CharField(max_length=100)
+
+
+
+    def __str__(self):
+        return f"{self.vendor.business_name} - Balance: GH₵{self.balance}"
+
+    class Meta:
+        verbose_name = 'Vendor Finance'
+        verbose_name_plural = 'Vendor Finances'
