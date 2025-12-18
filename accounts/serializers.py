@@ -26,6 +26,22 @@ class RegisterSerializer(serializers.ModelSerializer):
         if CustomUser.objects.filter(username__iexact=value).exists():
             raise serializers.ValidationError("A user with this username already exists.")
         return value
+    
+
+    # Extra validation to ensure at least one role is selected and not both simultaneously
+    def validate(self,data):
+        is_vendor = data.get('is_vendor', False)
+        is_customer = data.get('is_customer', False)
+        if not is_vendor and not is_customer:
+            raise serializers.ValidationError("At least one role (vendor or customer) must be selected.")
+    
+
+        if is_vendor and is_customer:
+            raise serializers.ValidationError(
+                "You cannot be both a vendor and a customer."
+        )
+
+        return data
 
 
     def create(self, validated_data):
