@@ -62,13 +62,21 @@ class Voucher(models.Model):
         super().save(*args, **kwargs)
 
     def __str__(self):
-        # Simplified, human-friendly string
         return f"{self.code} ({self.status})"
 
 
 class VoucherRedemption(models.Model):
     """This table tracks all the voucher redemptions made by a vendor."""
+    
+    PENDING = "PENDING"
+    REDEEMED = "REDEEMED"
+    CANCELLED = "CANCELLED"
 
+    STATUS_CHOICES = [
+        (PENDING, "Pending"),
+        (REDEEMED, "Redeemed"),
+        (CANCELLED, "Cancelled"),
+    ]
     voucher = models.ForeignKey(
         Voucher,
         on_delete=models.CASCADE,
@@ -81,6 +89,8 @@ class VoucherRedemption(models.Model):
     )
     redeemed_amount = models.DecimalField(max_digits=12, decimal_places=2)
     redeemed_at = models.DateTimeField(auto_now_add=True)
+
+    redemption_status = models.CharField(max_length=10, choices=STATUS_CHOICES, default=PENDING)
 
     class Meta:
         verbose_name = "Voucher Redemption"

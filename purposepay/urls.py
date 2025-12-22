@@ -36,7 +36,13 @@ urlpatterns = [
     # Vendor routes
     path('vendor/', include(('vendor.urls', 'vendor'), namespace='vendor')),
 
+    #Voucher routes
+    path('voucher/', include(('voucher.urls', 'voucher'), namespace='voucher')),
+
 ] 
+
+
+
 
 # Serving static files for vendor-related documents
 urlpatterns += [
