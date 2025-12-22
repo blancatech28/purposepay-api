@@ -5,7 +5,7 @@ from .views import (
     VendorSelfView,VendorCreateView,
     VendorPublicListView,VendorPublicDetailView,
     VendorAdminListView,VendorAdminDetailView,
-    VendorPayoutView,VendorApproveView,VendorRejectView,VendorTopUpView
+    VendorPayoutView,VendorApproveView,VendorRejectView,
 )
 
 
@@ -30,9 +30,6 @@ urlpatterns = [
 
     # Vendor payout endpoint
     path('payout/', VendorPayoutView.as_view(), name='vendor-payout'),
-
-    # Temporary vendor top-up endpoint (for testing purposes)
-    path('top-up/', VendorTopUpView.as_view(), name='vendor-top-up'),
     
 ]
 

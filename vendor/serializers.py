@@ -80,7 +80,12 @@ class VendorFinanceSerializer(serializers.ModelSerializer):
     def validate_payout_bank_name(self, value):
         if not value.strip():
             raise serializers.ValidationError("Bank name cannot be empty.")
+        
+        # The bank name should only contain letters and spaces
+        if not re.match(r'^[A-Za-z\s]+$', value):
+            raise serializers.ValidationError("Bank name can only contain letters and spaces.")
         return value
+       
 
 
 
@@ -169,6 +174,15 @@ class VendorProfileCreateSerializer(serializers.ModelSerializer):
                 "GPS code must be in format XX-0000-0000 (e.g., GW-0065-1601)."
             )
         return value
+    
+    def validate_business_address(self, value):
+        if not value.strip():
+            raise serializers.ValidationError("Business address cannot be empty.")
+
+        # Business address allows alphanumeric, spaces, commas, periods, hyphens
+        if not re.match(r'^[A-Za-z0-9\s,.\-]+$', value):
+            raise serializers.ValidationError("Business address contains invalid characters.")
+        return value
 
     def validate_phone_number(self, value):
         pattern = r"^(?:\+233|0)\d{9}$"
@@ -176,12 +190,21 @@ class VendorProfileCreateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 "Phone number must be in Ghanaian format."
             )
+        
+        # Check if phone number is used by another vendor
+        if VendorProfile.objects.filter(phone_number=value).exists():
+            raise serializers.ValidationError("This phone number is already in use by another vendor.")
         return value
 
     def validate_city(self, value):
         if not value.strip():
             raise serializers.ValidationError("City cannot be empty.")
+        
+        # The city should only contain letters and spaces
+        if not re.match(r'^[A-Za-z\s]+$', value):
+            raise serializers.ValidationError("City name can only contain letters and spaces.")
         return value
+    
 
 
 
@@ -204,16 +227,29 @@ class VendorProfileUpdateSerializer(serializers.ModelSerializer):
         pattern = r"^(?:\+233|0)\d{9}$"
         if not re.match(pattern, value):
             raise serializers.ValidationError("Phone number must be in Ghanaian format.")
+        
+        # Check if phone number is used by another vendor
+        user = self.context['request'].user
+        if VendorProfile.objects.filter(phone_number=value).exclude(user=user).exists():
+            raise serializers.ValidationError("This phone number is already in use by another vendor.")
         return value
 
     def validate_city(self, value):
         if not value.strip():
             raise serializers.ValidationError("City cannot be empty.")
+        
+        # The city should only contain letters and spaces
+        if not re.match(r'^[A-Za-z\s]+$', value):
+            raise serializers.ValidationError("City name can only contain letters and spaces.")
         return value
 
     def validate_business_address(self, value):
         if not value.strip():
             raise serializers.ValidationError("Business address cannot be empty.")
+
+        # Business address allows alphanumeric, spaces, commas, periods, hyphens
+        if not re.match(r'^[A-Za-z0-9\s,.\-]+$', value):
+            raise serializers.ValidationError("Business address contains invalid characters.")
         return value
 
     def validate_payout_account_number(self, value):
@@ -226,6 +262,10 @@ class VendorProfileUpdateSerializer(serializers.ModelSerializer):
     def validate_payout_bank_name(self, value):
         if not value.strip():
             raise serializers.ValidationError("Bank name cannot be empty.")
+        
+        # The bank name should only contain letters and spaces
+        if not re.match(r'^[A-Za-z\s]+$', value):
+            raise serializers.ValidationError("Bank name can only contain letters and spaces.")
         return value
 
     def update(self, instance, validated_data):
@@ -235,13 +275,14 @@ class VendorProfileUpdateSerializer(serializers.ModelSerializer):
         instance.business_address = validated_data.get('business_address', instance.business_address)
         instance.save()
 
-        # Update the finance fields if its provided
-        finance = instance.finance
-        if 'payout_account_number' in validated_data:
-            finance.payout_account_number = validated_data['payout_account_number']
-        if 'payout_bank_name' in validated_data:
-            finance.payout_bank_name = validated_data['payout_bank_name']
-        finance.save()
+        # Update the finance fields if its provided (optional)
+        finance = getattr(instance, 'finance', None)
+        if finance:
+            if 'payout_account_number' in validated_data:
+                finance.payout_account_number = validated_data['payout_account_number']
+            if 'payout_bank_name' in validated_data:
+                finance.payout_bank_name = validated_data['payout_bank_name']
+            finance.save()
 
         return instance
 
@@ -292,8 +333,16 @@ class VendorPayoutSerializer(serializers.Serializer):
 
     def validate_amount(self, value):
         vendor_profile = self.context.get('vendor_profile')
-        if value <= 0:
-            raise serializers.ValidationError("Amount must be greater than zero.")
-        if vendor_profile and value > vendor_profile.finance.balance:
-            raise serializers.ValidationError("Amount exceeds current balance.")
+        
+        # Check the minimum amount
+        if value < 50:
+            raise serializers.ValidationError("Minimum withdrawal amount must be 50.00 GHS or above.")
+        
+        # Check if a finance record exists
+        if not getattr(vendor_profile, 'finance', None):
+            raise serializers.ValidationError("This vendor has no finance record. Please set up payout details for payment.")
+        
+
+        if value > vendor_profile.finance.balance:
+            raise serializers.ValidationError("The withdrawal amount exceeds current balance.")
         return value

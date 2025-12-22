@@ -9,7 +9,7 @@ from .serializers import (
     VendorProfileCreateSerializer, VendorProfileUpdateSerializer,
     VendorAdminSerializer, VendorPayoutSerializer
 )
-from .permissions import IsVendorOwner
+from .permissions import IsApprovedVendor, IsVendorOwner
 from rest_framework.views import APIView
 from django.utils import timezone
 from rest_framework.exceptions import NotFound
@@ -31,6 +31,10 @@ class VendorSelfView(generics.RetrieveUpdateAPIView):
             return user.vendor_profile
         except VendorProfile.DoesNotExist:
             raise NotFound("No vendor profile found for this user.")
+
+        # def get_object(self):
+        #  Directly return the user's vendor profile
+        #     return self.request.user.vendor_profile
 
     def get_serializer_class(self):
         if self.request.method in ['PUT', 'PATCH']:
@@ -89,26 +93,21 @@ class VendorAdminDetailView(generics.RetrieveUpdateAPIView):
 # Vendor payout view
 class VendorPayoutView(generics.GenericAPIView):
     serializer_class = VendorPayoutSerializer
-    permission_classes = [permissions.IsAuthenticated, IsVendorOwner]
+    permission_classes = [permissions.IsAuthenticated, IsApprovedVendor]
     
     def post(self, request, *args, **kwargs):
-        # Get the vendor profile safely
-        vendor = getattr(request.user, 'vendor_profile', None)
-        if not vendor:
-            return Response(
-                {"error": "You must be a vendor to access this endpoint."},
-                status=status.HTTP_403_FORBIDDEN
-            )
-
+        vendor = self.request.user.vendor_profile
+        
         serializer = self.get_serializer(
             data=request.data,
             context={'vendor_profile': vendor}
         )
         serializer.is_valid(raise_exception=True)
-
-         # Subtract the requested amount from the available balance
+        
+        # Get the requested withdrawal amount from the validated data
         amount = serializer.validated_data['amount']
 
+        # Subtract the requested amount from the available balance
         vendor.finance.balance -= amount
         vendor.finance.save()
 
@@ -119,17 +118,37 @@ class VendorPayoutView(generics.GenericAPIView):
 
 
 #---------------------------
-# Admin approve/reject views
+# Approve/reject views for admin
 #---------------------------
+
+
+def get_vendor_and_verification(pk):
+    """Helper function to get vendor and verification objects."""
+    try:
+        vendor = VendorProfile.objects.get(pk=pk)
+    except VendorProfile.DoesNotExist:
+        raise NotFound("Vendor profile not found.")
+    
+    verification = getattr(vendor, 'verification', None)
+    if verification is None:
+        raise NotFound("The vendor verification record does not exist."
+                       "Vendor may not have completed verification setup.")
+    return vendor, verification
+
+
 
 class VendorApproveView(APIView):
     permission_classes = [permissions.IsAdminUser]
 
     def post(self, request, pk, *args, **kwargs):
-        try:
-            vendor = VendorProfile.objects.get(pk=pk)
-        except VendorProfile.DoesNotExist:
-            return Response({"error": "Vendor not found."}, status=404)
+        vendor, verification = get_vendor_and_verification(pk)
+
+        # Check for already approved vendor
+        if verification.status == VendorVerification.APPROVED:
+            return Response(
+                {"message": f"Vendor {vendor.business_name} is already approved."},
+                status=status.HTTP_200_OK
+            )
 
         vendor.verification.status = VendorVerification.APPROVED
         vendor.verification.admin_approved_date = timezone.now()
@@ -146,10 +165,14 @@ class VendorRejectView(APIView):
     permission_classes = [permissions.IsAdminUser]
 
     def post(self, request, pk, *args, **kwargs):
-        try:
-            vendor = VendorProfile.objects.get(pk=pk)
-        except VendorProfile.DoesNotExist:
-            return Response({"error": "Vendor not found."}, status=404)
+        vendor, verification = get_vendor_and_verification(pk)
+
+        # Check for already rejected vendor
+        if verification.status == VendorVerification.REJECTED:
+            return Response(
+                {"message": f"Vendor {vendor.business_name} is already rejected."},
+                status=status.HTTP_200_OK
+            )
 
         vendor.verification.status = VendorVerification.REJECTED
         vendor.verification.admin_approved_date = timezone.now()
@@ -162,48 +185,4 @@ class VendorRejectView(APIView):
         )
     
 
-
-# Temporary view for topping up vendor balance (for testing purposes)
-# vendor/views.py
-from decimal import Decimal, InvalidOperation
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from rest_framework import status
-from rest_framework.permissions import IsAuthenticated
-
-class VendorTopUpView(APIView):
-    """
-    Temporary endpoint for testing: top up vendor balance.
-    Only for testing purposes.
-    """
-    permission_classes = [IsAuthenticated]
-
-    def post(self, request):
-        amount = request.data.get("amount")
-        if amount is None:
-            return Response({"error": "Amount is required."}, status=status.HTTP_400_BAD_REQUEST)
-        
-        # Convert to Decimal safely
-        try:
-            amount = Decimal(str(amount))
-        except (InvalidOperation, ValueError):
-            return Response({"error": "Amount must be a valid number."}, status=status.HTTP_400_BAD_REQUEST)
-
-        if amount <= 0:
-            return Response({"error": "Amount must be greater than zero."}, status=status.HTTP_400_BAD_REQUEST)
-
-        # Get the vendor profile
-        try:
-            vendor_profile = request.user.vendor_profile
-        except AttributeError:
-            return Response({"error": "Vendor profile not found."}, status=status.HTTP_404_NOT_FOUND)
-
-        # Add the top-up amount
-        vendor_profile.finance.balance += amount
-        vendor_profile.finance.save()
-
-        return Response({
-            "message": "Balance topped up successfully.",
-            "new_balance": str(vendor_profile.finance.balance)  # Return as string to avoid JSON Decimal issues
-        }, status=status.HTTP_200_OK)
 
