@@ -10,7 +10,7 @@ class CustomUserAdmin(BaseUserAdmin):
 
     list_display = (
         "email","username","is_vendor","is_customer",
-        "is_staff","is_active",
+        "is_staff","is_active", "phone_number","profile_pic",
     )
 
     list_filter = ("is_vendor", "is_customer", "is_staff", "is_active")
@@ -19,7 +19,7 @@ class CustomUserAdmin(BaseUserAdmin):
 
     # Editing an existing user
     fieldsets = (
-        (None, {"fields": ("email", "username", "password")}),
+        (None, {"fields": ("email", "username", "password", "phone_number","profile_pic",)}),
         ("PurposePay Roles", {"fields": ("is_vendor", "is_customer")}),
         (
             "Permissions",
@@ -42,7 +42,7 @@ class CustomUserAdmin(BaseUserAdmin):
                 "fields": (
                     "email","username","password1",
                     "password2","is_vendor","is_customer",
-                    "is_active","is_staff",
+                    "is_active","is_staff", "phone_number","profile_pic",
                 ),
             },
         ),

@@ -1,4 +1,5 @@
 # accounts/models.py
+
 from django.contrib.auth.models import AbstractUser, BaseUserManager
 from django.db import models
 
@@ -7,11 +8,11 @@ from django.db import models
 class CustomUserManager(BaseUserManager):
     """
     Manager for CustomUser model.
-    Handles creating regular users and superusers.
+    This handles creating regular users and superusers.
     """
     def create_user(self, username, email, password=None, **extra_fields):
         """
-        Create and save a regular user with given email and password.
+        Create and save a regular user with the given email and password.
         """
         if not email:
             raise ValueError("Email must be provided")
@@ -22,9 +23,7 @@ class CustomUserManager(BaseUserManager):
         return user
 
     def create_superuser(self, username, email, password=None, **extra_fields):
-        """
-        Create and save a superuser with given email and password.
-        """
+        """ Create and save a superuser with given email and password."""
         extra_fields.setdefault("is_staff", True)
         extra_fields.setdefault("is_superuser", True)
         extra_fields.setdefault("is_active", True)
@@ -43,28 +42,29 @@ class CustomUser(AbstractUser):
     authentication identifier.
     """
     
-    email = models.EmailField(unique=True, verbose_name='email address',help_text='Required for login and must be unique.'
-    )
+    email = models.EmailField(unique=True, verbose_name='email address',help_text='Required for login and must be unique.')
     
     # USERNAME_FIELD changed to 'email' so users log in with their email 
     # instead of a traditional username.
     USERNAME_FIELD = 'email'
     
 
-    REQUIRED_FIELDS = ['username']  # Username is still required for other purposes.
+    REQUIRED_FIELDS = ['username']  
 
     objects = CustomUserManager()     # Custom manager for user creation.
 
 
     # PurposePay Role Flags (Defining the User Type)
-    is_vendor = models.BooleanField(
-        default=False,
-        help_text='Designates whether this user has a Vendor profile and can redeem vouchers.'
-    )
+    is_vendor = models.BooleanField(default=False,
+                                    help_text='Designates whether this user has a Vendor profile and can redeem vouchers.')
     
-    is_customer = models.BooleanField(
-        default=True,
-        help_text='Designates whether this user is a Customer/Sender and can create vouchers.'
+    is_customer = models.BooleanField(default=True,
+        help_text='Designates whether this user is a Customer/Sender and can create vouchers.')
+
+    profile_pic = models.ImageField(upload_to='profile_pics/',null=True,blank=True,help_text='Profile picture of the user.')
+    phone_number = models.CharField(
+        max_length=15,null=True,blank=True,
+        unique=True,help_text='Phone number of the user (Ghanaian format).'
     )
 
 
@@ -77,4 +77,3 @@ class CustomUser(AbstractUser):
 
 
 
-# Create your models here.

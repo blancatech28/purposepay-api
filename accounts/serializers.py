@@ -2,6 +2,10 @@
 from rest_framework import serializers
 from .models import CustomUser
 from django.contrib.auth import authenticate
+from django.contrib.auth import get_user_model
+import re
+
+User = get_user_model()
 
 
 
@@ -77,18 +81,23 @@ class UserSerializer(serializers.ModelSerializer):
     """
     class Meta:
         model = CustomUser
-        fields = ['id', 'username', 'email', 'is_vendor', 'is_customer']
+        fields = [
+            'id', 'username', 'email', 'is_customer',
+            'is_vendor','phone_number', 'profile_pic'
+            ]
+        read_only_fields = fields
 
 
 
 
 class UpdateUserSerializer(serializers.ModelSerializer):
     """
-    Serializer for updating user profile and role flags.
+    Serializer for updating user profile info.
+    Role flags (is_vendor, is_customer) are excluded from updates to avoid security risks.
     """
     class Meta:
         model = CustomUser
-        fields = ['username', 'email', 'is_vendor', 'is_customer']
+        fields = ['username', 'email', 'phone_number', 'profile_pic']
         extra_kwargs = {
             'email': {'required': True}
         }
@@ -104,12 +113,39 @@ class UpdateUserSerializer(serializers.ModelSerializer):
         if CustomUser.objects.filter(username__iexact=value).exclude(pk=user.pk).exists():
             raise serializers.ValidationError("A user with this username already exists.")
         return value
+    
+    # Phone number validation for Ghanaian format
+    def validate_phone_number(self, value):
+        pattern = r"^(?:\+233|0)\d{9}$"
+        if not re.match(pattern, value):
+            raise serializers.ValidationError(
+                "Phone number must be in Ghanaian format."
+            )
+        
+        # Check if phone number is used by another vendor
+        if User.objects.filter(phone_number=value).exclude(pk=self.instance.pk).exists():
+            raise serializers.ValidationError("This phone number is already in use by another user.")
+    
+        return value 
+    
+    
+    MAX_IMAGE_SIZE = 5 * 1024 * 1024 # 5MB
+
+    def validate_profile_pic(self, value):
+        allowed = ('.jpg', '.jpeg', '.png')
+        if not value.name.lower().endswith(allowed):
+            raise serializers.ValidationError("Profile picture must be JPG or PNG.")
+        if value.size > self.MAX_IMAGE_SIZE:
+            raise serializers.ValidationError("Image too large (max 5MB).")
+        return value
 
 
+
+    # Update instance
     def update(self, instance, validated_data):
         instance.username = validated_data.get('username', instance.username)
         instance.email = validated_data.get('email', instance.email)
-        instance.is_vendor = validated_data.get('is_vendor', instance.is_vendor)
-        instance.is_customer = validated_data.get('is_customer', instance.is_customer)
+        instance.phone_number = validated_data.get('phone_number', instance.phone_number)
+        instance.profile_pic = validated_data.get('profile_pic', instance.profile_pic)
         instance.save()
         return instance
