@@ -1,5 +1,4 @@
 # voucher/models.py
-
 import string
 import secrets
 from datetime import timedelta
@@ -7,10 +6,11 @@ from django.db import models
 from django.conf import settings
 from django.utils import timezone
 from vendor.models import VendorProfile
+from decimal import Decimal
 
 
 def generate_voucher_code():
-    """Generate a unique voucher code with a purposepay prefix as PP."""
+    """Generate a unique voucher code with the purposepay prefix as PP."""
     characters = string.ascii_uppercase + string.digits
     code_length = 11
     unique_part = ''.join(secrets.choice(characters) for _ in range(code_length))
@@ -25,13 +25,13 @@ def default_expiry():
 class Voucher(models.Model):
     """Table to store details of voucher issued to customers."""
 
-    PENDING_PAYMENT = "PENDING_PAYMENT"
+    PENDING = "PENDING"
     ACTIVE = "ACTIVE"
     LOCKED = "LOCKED"
     EXPIRED = "EXPIRED"
 
     STATUS_CHOICES = [
-        (PENDING_PAYMENT, "Pending Payment"),
+        (PENDING, "Pending"),
         (ACTIVE, "Active"),
         (LOCKED, "Locked"),
         (EXPIRED, "Expired"),
@@ -46,10 +46,16 @@ class Voucher(models.Model):
         max_length=50, choices=VendorProfile.CATEGORY_CHOICES, help_text="Redeemable by vendors in this category"
     )
     initial_amount = models.DecimalField(max_digits=12, decimal_places=2)
+    
     remaining_balance = models.DecimalField(max_digits=12, decimal_places=2, editable=False)
-    status = models.CharField(
-        max_length=20, choices=STATUS_CHOICES, default=PENDING_PAYMENT
+    
+    # Funds reserved to pay vendors during redemptions
+    escrow_balance = models.DecimalField(
+        max_digits=12, decimal_places=2, default=Decimal("0.00"), editable=False, help_text="Funds reserved to pay vendors"
     )
+    status = models.CharField(
+        max_length=20, choices=STATUS_CHOICES, default=PENDING)
+    
     expiry_date = models.DateTimeField(
         default=default_expiry,null=True,blank=True
     )
@@ -59,10 +65,14 @@ class Voucher(models.Model):
         # The remaining balance is set to the initial amount on creation
         if not self.pk:
             self.remaining_balance = self.initial_amount
+
+            # Escrow balance is also set to the initial amount when voucher is created
+            self.escrow_balance = self.initial_amount
         super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.code} ({self.status})"
+
 
 
 class VoucherRedemption(models.Model):
@@ -98,3 +108,14 @@ class VoucherRedemption(models.Model):
 
     def __str__(self):
         return f"{self.voucher.code} redeemed by {self.vendor.business_name}"
+    
+
+
+# A customer wallet to hold voucher balances
+class CustomerVoucherWallet(models.Model):
+    customer = models.OneToOneField(settings.AUTH_USER_MODEL, 
+                                    on_delete=models.CASCADE, related_name="wallet")
+    balance = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
+
+    def __str__(self):
+        return f"{self.customer.username} wallet: {self.balance} GHS"

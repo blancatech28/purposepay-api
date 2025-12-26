@@ -4,8 +4,46 @@ from decimal import Decimal
 from django.db import transaction
 from django.utils import timezone
 from rest_framework import serializers
+import voucher
 from .models import Voucher, VoucherRedemption
 from vendor.models import VendorProfile, VendorVerification, VendorFinance
+from .models import CustomerVoucherWallet
+
+
+#--------------------
+# Customer Wallet serializers
+#---------------------
+class CustomerVoucherWalletSerializer(serializers.ModelSerializer):
+    """"" This serializer display the customer's voucher wallet details (read-only)."""""
+    customer_username = serializers.ReadOnlyField(source="customer.username")
+    class Meta:
+        model = CustomerVoucherWallet
+        fields = ["id", "customer_username", "balance"]
+        read_only_fields = fields
+
+
+class WalletDepositSerializer(serializers.Serializer):
+    """"" Handles deposits into the customer's voucher wallet. """""
+    
+    amount = serializers.DecimalField(max_digits=12, decimal_places=2)
+
+    def validate_amount(self, value):
+        if value <= Decimal("0.00"):
+            raise serializers.ValidationError("Deposit amount must be greater than 0.")
+        return value
+
+    def deposit(self):
+        wallet = self.context["wallet"]
+        amount = self.validated_data["amount"]
+
+        # Perform atomic and row-level locked update to prevent race conditions
+        with transaction.atomic():
+            wallet = CustomerVoucherWallet.objects.select_for_update().get(pk=wallet.pk)
+            wallet.balance += amount
+            wallet.save(update_fields=["balance"])
+        return wallet
+
+
 
 
 # ---------------------------
@@ -14,8 +52,9 @@ from vendor.models import VendorProfile, VendorVerification, VendorFinance
 
 class VoucherCreateSerializer(serializers.ModelSerializer):
     """""
-    Serializer for creating vouchers by customers.
-    Only 'category' and 'initial_amount' are required from the user. The rest are read-only.
+    Serializer for creating vouchers by customers. 
+    The customer's wallet balance is checked before voucher creation.
+    Amount is deducted from the wallet to create the voucher only if enough balance exists.
     """""
 
     customer_username = serializers.ReadOnlyField(source="customer.username")
@@ -23,10 +62,10 @@ class VoucherCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Voucher
         fields = [
-            "id", "customer", "customer_username", "category", "initial_amount",
+            "id", "customer_username", "category", "initial_amount",
                   "expiry_date", "status", "created_at", "code"
         ]
-        read_only_fields = ["customer","customer_username", "expiry_date", "status", "created_at", "code"]
+        read_only_fields = ["customer_username", "expiry_date", "status", "created_at", "code"]
 
 
     # Validation to check minimum initial amount
@@ -36,8 +75,26 @@ class VoucherCreateSerializer(serializers.ModelSerializer):
         return value
 
     def create(self, validated_data):
-        # The customer is set from the request user
-        return Voucher.objects.create(**validated_data)
+        customer = self.context["request"].user
+        amount = validated_data["initial_amount"]
+
+        # Atomic operation to deduct wallet balance and create voucher
+        with transaction.atomic():
+            wallet, _ = CustomerVoucherWallet.objects.select_for_update().get_or_create(
+                customer=customer,defaults={"balance": Decimal("0.00")})
+
+
+            if wallet.balance < amount:
+                raise serializers.ValidationError("Insufficient wallet balance to create this voucher.")
+
+            # Subtract the amount from the wallet
+            wallet.balance -= amount
+            wallet.save(update_fields=["balance"])
+
+            # The voucher is created with status=PENDING
+            voucher = Voucher.objects.create(customer=customer, status=Voucher.PENDING, **validated_data)
+
+        return voucher
 
 
 class CustomerVoucherSerializer(serializers.ModelSerializer):
@@ -48,8 +105,8 @@ class CustomerVoucherSerializer(serializers.ModelSerializer):
     class Meta:
         model = Voucher
         fields = [
-            "id", "code", "category", "initial_amount", "remaining_balance",
-                  "status", "expiry_date", "created_at", "customer_username"
+            "id", "customer_username", "code", "category", "initial_amount", "remaining_balance",
+                  "status", "expiry_date", "created_at"
         ]
         read_only_fields = fields 
 
@@ -64,8 +121,8 @@ class CustomerVoucherDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = Voucher
         fields = [
-            "id", "code", "category", "initial_amount", "remaining_balance",
-                  "status", "expiry_date", "created_at", "customer_username", "redemptions"
+            "id", "customer_username", "code", "category", "initial_amount", "remaining_balance",
+                  "status", "expiry_date", "created_at", "redemptions"
         ]
         read_only_fields = fields
 
@@ -83,7 +140,7 @@ class VoucherRedemptionCreateSerializer(serializers.ModelSerializer):
     """""
     Serializer for vendors to request voucher redemption.
     The vendor redeems by entering code and amount, redemption is created as unconfirmed.
-    This is simulation of a vendor requesting redemption.
+    This is a simulation of a vendor requesting redemption.
     """""
 
     voucher_code = serializers.CharField(write_only=True)
@@ -157,21 +214,21 @@ class CustomerPendingRedemptionSerializer(serializers.ModelSerializer):
 
     vendor_name = serializers.ReadOnlyField(source="vendor.business_name")
     voucher_category = serializers.ReadOnlyField(source="voucher.category")
+    voucher_code = serializers.ReadOnlyField(source="voucher.code")
     
     class Meta:
         model = VoucherRedemption
-        fields = [
-            "id", "vendor_name", "redeemed_amount",
-            "redemption_status", "redeemed_at", "voucher_category"
-        ]
+        fields = ["id", "vendor_name","voucher_code","voucher_category", "redeemed_amount",
+            "redemption_status", "redeemed_at"]
         read_only_fields = fields
 
 
 class VoucherRedemptionConfirmSerializer(serializers.ModelSerializer):
     """
-    Customer confirms a redemption request.
-    Vendor balance is credited and voucher balance is deducted upon confirmation.
-    All these requests are simulated.
+    Customer confirms a vendor redemption request.
+    Money moves from the voucher escrow_balance to vendor finance balance upon confirmation by the customer.
+    At the same time, the voucher remaining_balance is reduced.
+    All these money movements are simulated.
     """
 
     class Meta:
@@ -183,85 +240,74 @@ class VoucherRedemptionConfirmSerializer(serializers.ModelSerializer):
         redemption = self.instance
         voucher = redemption.voucher
 
-
         # Prevent confirming already redeemed redemptions
         if redemption.redemption_status == VoucherRedemption.REDEEMED:
-            raise serializers.ValidationError(
-                "This redemption has already been redeemed."
-            )
-    
+            raise serializers.ValidationError("This redemption has already been redeemed.")
 
         # Voucher state may have changed after redemption request
         if voucher.status != Voucher.ACTIVE:
-            raise serializers.ValidationError(
-                "Voucher is no longer active."
-            )
+            raise serializers.ValidationError("Voucher is no longer active.")
 
         if voucher.expiry_date and voucher.expiry_date < timezone.now():
-            raise serializers.ValidationError(
-                "Voucher has expired."
-            )
+            raise serializers.ValidationError("Voucher has expired.")
 
         return data
-        
 
-    # Upon confirmation, update voucher and vendor balances atomically (simulation)
+    # Upon confirmation, update voucher escrow balance and vendor balances atomically (simulation)
     def update(self, instance, validated_data):
-        voucher = instance.voucher
-        vendor = instance.vendor
         amount = instance.redeemed_amount
 
-        # Vendor finance record must exist before crediting
-        if not hasattr(vendor, "finance"):
-            raise serializers.ValidationError(
-                "Vendor finance record not found."
-            )
-
-        
         with transaction.atomic():
-            # Re-fetch from the database to avoid against concurrent confirmations
-            instance.refresh_from_db()
-            voucher.refresh_from_db()
+            instance = (VoucherRedemption.objects.select_for_update().select_related("voucher", "vendor__finance")
+                        .get(pk=instance.pk))
 
+            voucher = instance.voucher
+            vendor = instance.vendor
+
+            # Vendor finance record must exist before crediting
+            if not hasattr(vendor, "finance"):
+                raise serializers.ValidationError("Vendor finance record not found.")
+
+            # Perform final checks before confirming redemption
             if instance.redemption_status == VoucherRedemption.REDEEMED:
                 raise serializers.ValidationError("This redemption is already redeemed.")
-           
 
-           # Voucher balance check before finalizing
+            # Escrow balance check before finalizing (the money source)
+            if amount > voucher.escrow_balance:
+                raise serializers.ValidationError("Insufficient escrow balance to confirm this redemption.")
+
+            # Check remaining balance too
             if amount > voucher.remaining_balance:
-                raise serializers.ValidationError(
-                    "Insufficient voucher balance to confirm this redemption."
-                )
-            
+                raise serializers.ValidationError("Insufficient voucher remaining balance.")
 
             # Only finalize voucher redemption after customer confirms
             instance.redemption_status = VoucherRedemption.REDEEMED
             instance.save(update_fields=["redemption_status"])
 
-            # Deduct voucher balance
+            # Deduct from voucher escrow balance and credit vendor finance balance
+            voucher.escrow_balance -= amount
+            vendor.finance.balance += amount
+
+            # update voucher remaining balance
             voucher.remaining_balance -= amount
+
+            # If voucher balance is zero or less, lock the voucher
             if voucher.remaining_balance <= 0:
                 voucher.remaining_balance = 0
                 voucher.status = Voucher.LOCKED
-                voucher.save(update_fields=["remaining_balance", "status"])
 
-                # Other pending redemptions will be cancelled,
-                # if voucher is locked or balance is zero
+                # Other pending redemptions will be cancelled, as no more funds are available
                 VoucherRedemption.objects.filter(
                     voucher=voucher,
                     redemption_status=VoucherRedemption.PENDING
-                ).exclude(id=instance.id).update(
-                    redemption_status=VoucherRedemption.CANCELLED
-                )
-            else:
-                voucher.save(update_fields=["remaining_balance"])
+                ).exclude(id=instance.id).update(redemption_status=VoucherRedemption.CANCELLED)
 
-            # Credit the vendor
-            vendor_finance = vendor.finance
-            vendor_finance.balance += amount
-            vendor_finance.save(update_fields=["balance"])
+            # Save all the changes made
+            voucher.save(update_fields=["escrow_balance", "remaining_balance", "status"])
+            vendor.finance.save(update_fields=["balance"])
 
         return instance
+
 
 
 class VoucherRedemptionSerializer(serializers.ModelSerializer):
@@ -269,10 +315,11 @@ class VoucherRedemptionSerializer(serializers.ModelSerializer):
 
     vendor_name = serializers.ReadOnlyField(source="vendor.business_name")
     voucher_code = serializers.ReadOnlyField(source="voucher.code")
+    voucher_owner = serializers.ReadOnlyField(source="voucher.customer.username")
 
     class Meta:
         model = VoucherRedemption
-        fields = ["id", "voucher_code", "vendor_name", "redeemed_amount", "redeemed_at","redemption_status"]
+        fields = ["id", "voucher_owner","voucher_code", "vendor_name", "redeemed_amount", "redeemed_at","redemption_status"]
         read_only_fields = fields
 
 
@@ -299,8 +346,8 @@ class AdminVoucherListSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Voucher
-        fields = ["id", "code", "category", "initial_amount", "remaining_balance",
-                  "status", "expiry_date", "created_at", "customer_username", "redemptions_count"]
+        fields = ["id", "customer_username", "code", "category", "initial_amount", "remaining_balance",
+                  "status", "expiry_date", "created_at", "redemptions_count"]
         read_only_fields = fields
 
     def get_redemptions_count(self, obj):
@@ -314,8 +361,8 @@ class AdminVoucherDetailSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Voucher
-        fields = ["id", "code", "category", "initial_amount", "remaining_balance",
-                  "status", "expiry_date", "created_at", "customer_username", "redemptions"]
+        fields = ["id", "customer_username", "code", "category", "initial_amount", "remaining_balance", "escrow_balance",
+                  "status", "expiry_date", "created_at", "redemptions"]
         read_only_fields = fields
 
     def get_redemptions(self, obj):

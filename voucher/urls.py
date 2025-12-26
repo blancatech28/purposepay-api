@@ -4,10 +4,15 @@ from .views import (
     VoucherRedemptionCreateView, VendorRedemptionHistoryView,
     CustomerPendingRedemptionListView, VoucherRedemptionConfirmView,VoucherRedemptionCancelView,
     AdminVoucherListView, AdminVoucherDetailView,
-    VoucherActivateSimulationView, ApprovedVendorsListView
+    VoucherActivateSimulationView, ApprovedVendorsListView, CustomerVoucherWalletView, WalletDepositView
 )
 
 urlpatterns = [
+
+    # Customer Voucher Wallet
+    path('wallet/', CustomerVoucherWalletView.as_view(), name='customer-voucher-wallet'),
+    path('wallet/deposit/', WalletDepositView.as_view(), name='wallet-deposit'),
+    
     # Customer Vouchers
     path('create/', VoucherCreateView.as_view(), name='voucher-create'),
     path('my/', CustomerVoucherListView.as_view(), name='customer-voucher-list'),

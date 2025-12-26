@@ -5,12 +5,12 @@ from .models import Voucher, VoucherRedemption
 @admin.register(Voucher)
 class VoucherAdmin(admin.ModelAdmin):
     list_display = (
-        "code","customer","category","status","initial_amount",
-        "remaining_balance","expiry_date","created_at",
+        "code","customer__email","customer__username","category","status","initial_amount",
+        "remaining_balance","escrow_balance","expiry_date","created_at",
     )
 
     list_filter = ("status", "category")
-    search_fields = ("code", "customer__email", "customer__username")
+    search_fields = ("code", "customer__username","customer__email", "customer__username")
     ordering = ("-created_at",)
 
     readonly_fields = ("code","remaining_balance","created_at",)
