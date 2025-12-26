@@ -3,7 +3,7 @@
 from rest_framework import generics, permissions, status
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
-from .models import VendorProfile, VendorVerification
+from .models import VendorPayoutHistory, VendorProfile, VendorVerification
 from .serializers import (
     VendorReadSerializer, VendorPublicReadSerializer,
     VendorProfileCreateSerializer, VendorProfileUpdateSerializer,
@@ -12,7 +12,11 @@ from .serializers import (
 from .permissions import IsApprovedVendor, IsVendorOwner
 from rest_framework.views import APIView
 from django.utils import timezone
+from django.db import transaction
 from rest_framework.exceptions import NotFound
+from django_filters.rest_framework import DjangoFilterBackend
+from rest_framework.filters import SearchFilter, OrderingFilter
+from django.db.models import Prefetch
 
 
 # Vendor view (authenticated vendor)
@@ -31,11 +35,7 @@ class VendorSelfView(generics.RetrieveUpdateAPIView):
             return user.vendor_profile
         except VendorProfile.DoesNotExist:
             raise NotFound("No vendor profile found for this user.")
-
-        # def get_object(self):
-        #  Directly return the user's vendor profile
-        #     return self.request.user.vendor_profile
-
+    
     def get_serializer_class(self):
         if self.request.method in ['PUT', 'PATCH']:
             return VendorProfileUpdateSerializer
@@ -62,6 +62,14 @@ class VendorPublicListView(generics.ListAPIView):
     serializer_class = VendorPublicReadSerializer
     permission_classes = [permissions.IsAuthenticated]
 
+    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
+
+    # filter/search/ordering 
+    filterset_fields = ['category', 'city']
+    search_fields = ['business_name', 'city']
+    ordering_fields = ['business_name', 'created_at', 'city']
+    ordering = ['business_name']  # default
+
 
 class VendorPublicDetailView(generics.RetrieveAPIView):
     """Show details of a single approved vendor."""
@@ -75,12 +83,20 @@ class VendorAdminListView(generics.ListAPIView):
     serializer_class = VendorAdminSerializer
     permission_classes = [permissions.IsAdminUser]
 
+    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
+
+    # Filter/search/order by verification status, category, city
+    filterset_fields = ["verification__status", "category", "city"]
+    search_fields = ["business_name","user__email"]
+    ordering_fields = ["business_name", "city", "verification__status"]
+    ordering = ["business_name"]
+
     def get_queryset(self):
-        qs = VendorProfile.objects.all()
-        status_filter = self.request.query_params.get('status')
-        if status_filter:
-            qs = qs.filter(verification__status=status_filter.upper())
-        return qs
+        # Prefetch payout hisory for every vendor
+        return VendorProfile.objects.prefetch_related(
+            Prefetch('payout_history', queryset=VendorPayoutHistory.objects.all())
+        )
+
 
 
 class VendorAdminDetailView(generics.RetrieveUpdateAPIView):
@@ -88,6 +104,7 @@ class VendorAdminDetailView(generics.RetrieveUpdateAPIView):
     queryset = VendorProfile.objects.all()
     serializer_class = VendorAdminSerializer
     permission_classes = [permissions.IsAdminUser]
+
 
 
 # Vendor payout view
@@ -107,9 +124,18 @@ class VendorPayoutView(generics.GenericAPIView):
         # Get the requested withdrawal amount from the validated data
         amount = serializer.validated_data['amount']
 
-        # Subtract the requested amount from the available balance
-        vendor.finance.balance -= amount
-        vendor.finance.save()
+        # Payment to the vendor are handled atomically with row level locking
+        with transaction.atomic():
+            finance = VendorProfile.objects.select_for_update().get(pk=vendor.pk).finance
+
+            # Subtract the requested amount from the available balance
+            finance.balance -= amount
+            finance.save()
+
+            # Payment is recorded in payout history
+            VendorPayoutHistory.objects.create(vendor=vendor,
+                amount=amount, processed_by=request.user)
+
 
         return Response(
             {"message": f"Successfully processed payment of GH₵{amount}."},
@@ -120,7 +146,6 @@ class VendorPayoutView(generics.GenericAPIView):
 #---------------------------
 # Approve/reject views for admin
 #---------------------------
-
 
 def get_vendor_and_verification(pk):
     """Helper function to get vendor and verification objects."""
