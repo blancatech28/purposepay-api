@@ -47,7 +47,6 @@ class VendorProfile(models.Model):
         help_text="GPS code (e.g., GW-0062-1604). Must be provided."
     )
 
-
     PHARMACY = "PHARMACY"
     SCHOOL = "SCHOOL"
     HARDWARE = "HARDWARE"
@@ -61,9 +60,7 @@ class VendorProfile(models.Model):
     ]
 
     category = models.CharField(max_length=50, choices=CATEGORY_CHOICES, default=OTHER)
-
-
-
+    
     def __str__(self):
         return f"{self.business_name}"
 
@@ -84,9 +81,6 @@ class VendorVerification(models.Model):
         on_delete=models.CASCADE,
         related_name='verification'
     )
-
-
-
 #------------------------
     #Verification Documents
 #--------------------------
@@ -178,3 +172,21 @@ class VendorFinance(models.Model):
     class Meta:
         verbose_name = 'Vendor Finance'
         verbose_name_plural = 'Vendor Finances'
+
+
+
+class VendorPayoutHistory(models.Model):
+    """Records each payout made to a vendor."""
+
+    vendor = models.ForeignKey(VendorProfile, on_delete=models.CASCADE, related_name='payout_history')
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    created_at = models.DateTimeField(auto_now_add=True)
+    processed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True, blank=True,
+        on_delete=models.SET_NULL,
+        help_text="The vendor who processed the payout.")
+
+    def __str__(self):
+        return f"Payout GH₵{self.amount} to {self.vendor.business_name} on {self.created_at}"
+

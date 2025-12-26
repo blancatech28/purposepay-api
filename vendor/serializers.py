@@ -1,10 +1,16 @@
 # vendor/serializers.py
 import re
 from rest_framework import serializers
-from .models import VendorProfile, VendorVerification, VendorFinance
+from .models import VendorProfile, VendorVerification, VendorFinance, VendorPayoutHistory
 from datetime import datetime
 
-
+# Payout histrory serializer
+class VendorPayoutHistorySerializer(serializers.ModelSerializer):
+       processed_by = serializers.CharField(source='processed_by.username', read_only=True)
+       
+       class Meta:
+        model = VendorPayoutHistory
+        fields = ['id', 'amount', 'processed_by', 'created_at']
 
 # Vendor Read Serializer (vendor auth view)
 class VendorReadSerializer(serializers.ModelSerializer):
@@ -33,12 +39,14 @@ class VendorReadSerializer(serializers.ModelSerializer):
     )
     payout_bank_name = serializers.CharField(source='finance.payout_bank_name', read_only=True)
 
+    payout_history = VendorPayoutHistorySerializer(many=True, read_only=True)
+
     class Meta:
         model = VendorProfile
         fields = [
             'id', 'user_email', 'business_name', 'category', 'status','admin_approved_date', 'phone_number', 
-            'country', 'city','business_address', 'gps_code', 'balance', 'payout_account_number',
-            'payout_bank_name', 'owner_id_type', 'owner_id_document','business_registration_document', 'business_location_image',
+            'country', 'city','business_address', 'gps_code', 'balance', 'payout_account_number','payout_bank_name',
+            'owner_id_type', 'owner_id_document','business_registration_document', 'business_location_image', 'payout_history'
         ]
         read_only_fields = fields
 
@@ -287,8 +295,6 @@ class VendorProfileUpdateSerializer(serializers.ModelSerializer):
         return instance
 
     
-
-
 class VendorAdminSerializer(serializers.ModelSerializer):
     """Admin operations on vendor profiles, can only change 'status'."""
 
@@ -301,18 +307,19 @@ class VendorAdminSerializer(serializers.ModelSerializer):
     payout_account_number = serializers.CharField(source='finance.payout_account_number', read_only=True)
     payout_bank_name = serializers.CharField(source='finance.payout_bank_name', read_only=True)
     last_modified_by = serializers.CharField(source='verification.last_modified_by.username', read_only=True)
+    payout_history = VendorPayoutHistorySerializer(many=True, read_only=True)
 
     class Meta:
         model = VendorProfile
         fields = [
             'id', 'user_email', 'business_name', 'category', 'status',
             'admin_approved_date', 'last_modified_by', 'balance',
-            'payout_account_number', 'payout_bank_name',
+            'payout_account_number', 'payout_bank_name', 'payout_history'
         ]
         read_only_fields = [
             'user_email', 'business_name', 'category', 'admin_approved_date',
             'last_modified_by', 'balance', 'payout_account_number',
-            'payout_bank_name',
+            'payout_bank_name', 'payout_history'
         ]
 
     def update(self, instance, validated_data):
