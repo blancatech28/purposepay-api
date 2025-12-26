@@ -25,6 +25,9 @@ urlpatterns = [
     # Admin panel
     path("admin/", admin.site.urls),
 
+     # Home page
+    path('', include(('home.urls', 'home'), namespace='home')),
+
     # Auth routes: only login/logout
     # Using namespace 'auth' for reverse lookups: auth:login, auth:logout
     path('auth/', include(('accounts.urls', 'accounts'), namespace='auth')),
@@ -46,6 +49,7 @@ urlpatterns = [
 
 # Serving static files for vendor-related documents
 urlpatterns += [
+      re_path(r'^profile_pics/(?P<path>.*)$', serve, {'document_root': settings.PROFILE_PIC_DIR}),
     re_path(r'^vendor_ids/(?P<path>.*)$', serve, {'document_root': settings.VENDOR_ID_DIR}),
     re_path(r'^vendor_certificates/(?P<path>.*)$', serve, {'document_root': settings.VENDOR_CERT_DIR}),
     re_path(r'^vendor_locations/(?P<path>.*)$', serve, {'document_root': settings.VENDOR_LOCATION_DIR}),

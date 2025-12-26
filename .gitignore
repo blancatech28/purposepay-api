@@ -93,6 +93,7 @@ vendor_api_keys/
 vendor_certificates/
 vendor_ids/
 vendor_locations/
+profile_pics/
 
 
 # pyenv

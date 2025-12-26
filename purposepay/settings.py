@@ -18,9 +18,11 @@ import os
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))  
 BASE_DIR = os.path.dirname(BASE_DIR)                  
 
+PROFILE_PIC_DIR = os.path.join(BASE_DIR, 'profile_pics')
 VENDOR_ID_DIR = os.path.join(BASE_DIR, 'vendor_ids')
 VENDOR_CERT_DIR = os.path.join(BASE_DIR, 'vendor_certificates')
 VENDOR_LOCATION_DIR = os.path.join(BASE_DIR, 'vendor_locations')
+
 
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -52,9 +54,11 @@ INSTALLED_APPS = [
     "rest_framework",
     "rest_framework.authtoken",
     "corsheaders",
+    "django_filters",
     "accounts",   # Custom user app
     "vendor",     # Vendor app
     "voucher",    # Voucher app
+    "home",       # Home app
 ]
 
 AUTH_USER_MODEL = "accounts.CustomUser" 
@@ -79,7 +83,7 @@ ROOT_URLCONF = "purposepay.urls"
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [],
+        "DIRS": [BASE_DIR / "templates"],
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [
@@ -142,7 +146,13 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
-STATIC_URL = "static/"
+STATIC_URL = '/static/'
+
+# Optional but recommended for development
+STATICFILES_DIRS = [
+    BASE_DIR / "static", 
+]
+
 
 # Rest Framework Configuration
 REST_FRAMEWORK = {
@@ -151,6 +161,11 @@ REST_FRAMEWORK = {
     ],
     "DEFAULT_PERMISSION_CLASSES": [
         "rest_framework.permissions.IsAuthenticated",
+    ],
+    "DEFAULT_FILTER_BACKENDS": [
+        "django_filters.rest_framework.DjangoFilterBackend",
+        "rest_framework.filters.SearchFilter",
+        "rest_framework.filters.OrderingFilter",
     ],
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 10,
