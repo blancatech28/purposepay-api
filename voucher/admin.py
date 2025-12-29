@@ -4,10 +4,8 @@ from .models import Voucher, VoucherRedemption
 # Voucher model Admin registration
 @admin.register(Voucher)
 class VoucherAdmin(admin.ModelAdmin):
-    list_display = (
-        "code","customer__email","customer__username","category","status","initial_amount",
-        "remaining_balance","escrow_balance","expiry_date","created_at",
-    )
+    list_display = ("code","customer__email","customer__username","category","status","initial_amount",
+        "remaining_balance","escrow_balance","expiry_date","created_at",)
 
     list_filter = ("status", "category")
     search_fields = ("code", "customer__username","customer__email", "customer__username")

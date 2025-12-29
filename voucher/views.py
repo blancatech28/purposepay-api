@@ -16,6 +16,7 @@ from vendor.models import VendorProfile, VendorVerification
 from vendor.permissions import IsApprovedVendor
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
+from .utils import update_expired_vouchers
 
 
 
@@ -72,7 +73,8 @@ class CustomerVoucherListView(generics.ListAPIView):
     ordering = ["-created_at"]
 
     def get_queryset(self):
-        return Voucher.objects.filter(customer=self.request.user)
+        vouchers = Voucher.objects.filter(customer=self.request.user)
+        return update_expired_vouchers(vouchers)
 
 
 class CustomerVoucherDetailView(generics.RetrieveAPIView):
@@ -83,7 +85,8 @@ class CustomerVoucherDetailView(generics.RetrieveAPIView):
     lookup_field = 'id'
 
     def get_queryset(self):
-        return Voucher.objects.filter(customer=self.request.user)
+        vouchers = Voucher.objects.filter(customer=self.request.user)
+        return update_expired_vouchers(vouchers)
 
 
 
@@ -131,8 +134,7 @@ class CustomerPendingRedemptionListView(generics.ListAPIView):
     permission_classes = [IsAuthenticated, IsCustomer]
 
     def get_queryset(self):
-        return VoucherRedemption.objects.filter(
-        voucher__customer=self.request.user,
+        return VoucherRedemption.objects.filter(voucher__customer=self.request.user,
         redemption_status=VoucherRedemption.PENDING).order_by("-redeemed_at")
 
 
@@ -167,9 +169,9 @@ class VoucherRedemptionConfirmView(generics.UpdateAPIView):
 
 
 
-# -----------------------------
+# -----------------
 # Admin Views
-# -----------------------------
+# ----------------
 class AdminVoucherListView(generics.ListAPIView):
     """Admin sees a list of all vouchers."""
     serializer_class = AdminVoucherListSerializer
@@ -181,7 +183,9 @@ class AdminVoucherListView(generics.ListAPIView):
     ordering_fields = ["created_at","initial_amount","remaining_balance"]
     ordering = ["-created_at"]
     
-    queryset = Voucher.objects.all()
+    def get_queryset(self):
+        all_vouchers = Voucher.objects.all()
+        return update_expired_vouchers(all_vouchers)
 
 
 class AdminVoucherDetailView(generics.RetrieveAPIView):
@@ -190,6 +194,10 @@ class AdminVoucherDetailView(generics.RetrieveAPIView):
     permission_classes = [IsAuthenticated, IsAdminUser]
     queryset = Voucher.objects.all()
     lookup_field = 'id'
+
+    def get_queryset(self):
+        all_vouchers = Voucher.objects.all()
+        return update_expired_vouchers(all_vouchers)
 
 
 
@@ -209,6 +217,7 @@ class VoucherActivateSimulationView(APIView):
         # Fetch the voucher for the authenticated customer
         try:
             voucher = Voucher.objects.get(id=voucher_id, customer=request.user)
+            voucher.update_status_if_expired()
         except Voucher.DoesNotExist:
             return Response(
                 {"detail": "Voucher not found or does not belong to you."},
@@ -222,7 +231,7 @@ class VoucherActivateSimulationView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # payment simulation is successful and the voucher is activated
+        # process is successful and the voucher is activated
         voucher.status = Voucher.ACTIVE
         voucher.save(update_fields=['status'])
 
@@ -249,10 +258,8 @@ class ApprovedVendorsListView(generics.ListAPIView):
     def get(self, request, category):
         city = request.query_params.get('city', None)
 
-        vendors = VendorProfile.objects.filter(
-            category=category,
-            verification__status=VendorVerification.APPROVED
-        )
+        vendors = VendorProfile.objects.filter(category=category,
+            verification__status=VendorVerification.APPROVED)
 
         # If city is provided, filter by city as well
         if city:

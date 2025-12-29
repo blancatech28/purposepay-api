@@ -11,16 +11,18 @@ from .serializers import RegisterSerializer, LoginSerializer, UserSerializer, Up
 
 User = get_user_model()
 
-
 class RegisterView(generics.CreateAPIView):
-    """POST /account/register/ - create a new user"""
+    """This view is for creating a new user"""
     queryset = User.objects.all()
     serializer_class = RegisterSerializer
     permission_classes = [permissions.AllowAny]
 
 
 class LoginView(APIView):
-    """POST /auth/login/ - authenticate user and return token"""
+    """
+    View shows user logging in with valid info (authentication sucess).
+    The token is returned.
+    """
     permission_classes = [permissions.AllowAny]
 
     def post(self, request):
@@ -40,7 +42,7 @@ class LoginView(APIView):
 
 
 class LogoutView(APIView):
-    """POST /auth/logout/ - delete user's token"""
+    """A user's token is deleted after logging out"""
     authentication_classes = [TokenAuthentication]
     permission_classes = [permissions.IsAuthenticated]
 
@@ -54,7 +56,9 @@ class LogoutView(APIView):
 
 
 class UserProfileView(generics.RetrieveUpdateAPIView):
-    """GET /account/me/ - view profile, PUT/PATCH - update profile"""
+    """
+    GET /account/me/ - view the user profile, PUT/PATCH - update the profile
+    """
     authentication_classes = [TokenAuthentication]
     permission_classes = [permissions.IsAuthenticated]
 

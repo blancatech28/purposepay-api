@@ -5,13 +5,11 @@ from .models import CustomUser
 
 @admin.register(CustomUser)
 class CustomUserAdmin(BaseUserAdmin):
-    """""Admin interface for the CustomUser model."""""
+    """""The admin interface for the CustomUser model."""""
     model = CustomUser
 
-    list_display = (
-        "email","username","is_vendor","is_customer",
-        "is_staff","is_active", "phone_number","profile_pic",
-    )
+    list_display = ("email","username","is_vendor","is_customer",
+        "is_staff","is_active", "phone_number","profile_pic")
 
     list_filter = ("is_vendor", "is_customer", "is_staff", "is_active")
     search_fields = ("email", "username")
@@ -24,10 +22,7 @@ class CustomUserAdmin(BaseUserAdmin):
         (
             "Permissions",
             {
-                "fields": (
-                    "is_active","is_staff","is_superuser",
-                    "groups","user_permissions",
-                )
+                "fields": ("is_active","is_staff","is_superuser","groups","user_permissions",)
             },
         ),
         ("Important dates", {"fields": ("last_login", "date_joined")}),

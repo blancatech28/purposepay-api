@@ -10,11 +10,11 @@ from vendor.models import VendorProfile, VendorVerification, VendorFinance
 from .models import CustomerVoucherWallet
 
 
-#--------------------
+#------------------------
 # Customer Wallet serializers
-#---------------------
+#------------------------
 class CustomerVoucherWalletSerializer(serializers.ModelSerializer):
-    """"" This serializer display the customer's voucher wallet details (read-only)."""""
+    """"" This serializer displays the customer's voucher wallet details (read-only)."""""
     customer_username = serializers.ReadOnlyField(source="customer.username")
     class Meta:
         model = CustomerVoucherWallet
@@ -36,7 +36,7 @@ class WalletDepositSerializer(serializers.Serializer):
         wallet = self.context["wallet"]
         amount = self.validated_data["amount"]
 
-        # Perform atomic and row-level locked update to prevent race conditions
+        # Transaction is handled atomically and row-level locked update to prevent race conditions
         with transaction.atomic():
             wallet = CustomerVoucherWallet.objects.select_for_update().get(pk=wallet.pk)
             wallet.balance += amount
@@ -83,7 +83,6 @@ class VoucherCreateSerializer(serializers.ModelSerializer):
             wallet, _ = CustomerVoucherWallet.objects.select_for_update().get_or_create(
                 customer=customer,defaults={"balance": Decimal("0.00")})
 
-
             if wallet.balance < amount:
                 raise serializers.ValidationError("Insufficient wallet balance to create this voucher.")
 
@@ -98,7 +97,7 @@ class VoucherCreateSerializer(serializers.ModelSerializer):
 
 
 class CustomerVoucherSerializer(serializers.ModelSerializer):
-    """""This shows the list of a customer's vouchers (read-only)."""""
+    """""This serializer shows the list of a customer's vouchers (read-only)."""""
 
     customer_username = serializers.ReadOnlyField(source="customer.username")
 
@@ -139,7 +138,7 @@ class CustomerVoucherDetailSerializer(serializers.ModelSerializer):
 class VoucherRedemptionCreateSerializer(serializers.ModelSerializer):
     """""
     Serializer for vendors to request voucher redemption.
-    The vendor redeems by entering code and amount, redemption is created as unconfirmed.
+    The vendor redeems by entering code and amount, redemption is created as PENDING.
     This is a simulation of a vendor requesting redemption.
     """""
 
@@ -170,14 +169,13 @@ class VoucherRedemptionCreateSerializer(serializers.ModelSerializer):
         except Voucher.DoesNotExist:
             raise serializers.ValidationError("Invalid voucher code.")
 
+        voucher.update_status_if_expired()
         
         if voucher.status != Voucher.ACTIVE:
             raise serializers.ValidationError("Voucher is not active.")
         
         if voucher.expiry_date and voucher.expiry_date < timezone.now():
-            raise serializers.ValidationError(
-                "Voucher has expired."
-            )
+            raise serializers.ValidationError("Voucher has expired.")
 
         if amount < Decimal("50.00"):
             raise serializers.ValidationError("Minimum redemption amount is 50 GHS.")
@@ -199,12 +197,12 @@ class VoucherRedemptionCreateSerializer(serializers.ModelSerializer):
         
         return data
 
-    # Create redemption for vendor with is_confirmed=False
+    # Create redemption for vendor with status as PENDING by default
     def create(self, validated_data):
         validated_data.pop("voucher_code")
 
-        # status of redemption is PENDING by default
         return VoucherRedemption.objects.create(**validated_data)
+
 
 
 class CustomerPendingRedemptionSerializer(serializers.ModelSerializer):
@@ -226,7 +224,7 @@ class CustomerPendingRedemptionSerializer(serializers.ModelSerializer):
 class VoucherRedemptionConfirmSerializer(serializers.ModelSerializer):
     """
     Customer confirms a vendor redemption request.
-    Money moves from the voucher escrow_balance to vendor finance balance upon confirmation by the customer.
+    Money moves from the escrow_balance to the vendor balance upon confirmation by the customer.
     At the same time, the voucher remaining_balance is reduced.
     All these money movements are simulated.
     """
@@ -239,6 +237,7 @@ class VoucherRedemptionConfirmSerializer(serializers.ModelSerializer):
     def validate(self, data):
         redemption = self.instance
         voucher = redemption.voucher
+        voucher.update_status_if_expired()  
 
         # Prevent confirming already redeemed redemptions
         if redemption.redemption_status == VoucherRedemption.REDEEMED:
@@ -253,7 +252,7 @@ class VoucherRedemptionConfirmSerializer(serializers.ModelSerializer):
 
         return data
 
-    # Upon confirmation, update voucher escrow balance and vendor balances atomically (simulation)
+    # Upon confirmation, the voucher escrow balance and vendor balances are updated atomically (simulation)
     def update(self, instance, validated_data):
         amount = instance.redeemed_amount
 
@@ -268,7 +267,7 @@ class VoucherRedemptionConfirmSerializer(serializers.ModelSerializer):
             if not hasattr(vendor, "finance"):
                 raise serializers.ValidationError("Vendor finance record not found.")
 
-            # Perform final checks before confirming redemption
+            # Ensures voucher is not redeemed already
             if instance.redemption_status == VoucherRedemption.REDEEMED:
                 raise serializers.ValidationError("This redemption is already redeemed.")
 
@@ -291,7 +290,7 @@ class VoucherRedemptionConfirmSerializer(serializers.ModelSerializer):
             # update voucher remaining balance
             voucher.remaining_balance -= amount
 
-            # If voucher balance is zero or less, lock the voucher
+            # If the remaining voucher balance is zero or less, lock the voucher
             if voucher.remaining_balance <= 0:
                 voucher.remaining_balance = 0
                 voucher.status = Voucher.LOCKED

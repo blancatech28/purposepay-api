@@ -54,6 +54,13 @@ class VendorCreateView(generics.CreateAPIView):
         if not getattr(user, 'is_vendor', False):
             raise PermissionDenied("You need to be a vendor to create a vendor profile.")
         serializer.save(user=user)
+    
+    def create(self, request, *args, **kwargs):
+        response = super().create(request, *args, **kwargs)
+        return Response({
+        "message": "Vendor profile created successfully. Your account is currently inactive and will be reviewed for approval (Status: PENDING).",
+        "vendor": response.data
+    }, status=status.HTTP_201_CREATED)
 
 
 # Public vendor list and retrieve views for customers (NO anonymous access)
@@ -98,7 +105,6 @@ class VendorAdminListView(generics.ListAPIView):
         )
 
 
-
 class VendorAdminDetailView(generics.RetrieveUpdateAPIView):
     """Admin can see a vendor profile and update only the status field."""
     queryset = VendorProfile.objects.all()
@@ -132,7 +138,7 @@ class VendorPayoutView(generics.GenericAPIView):
             finance.balance -= amount
             finance.save()
 
-            # Payment is recorded in payout history
+            # Payment is recorded in payout history model
             VendorPayoutHistory.objects.create(vendor=vendor,
                 amount=amount, processed_by=request.user)
 
@@ -162,6 +168,7 @@ def get_vendor_and_verification(pk):
 
 
 
+# Approve a vendor profile on pending
 class VendorApproveView(APIView):
     permission_classes = [permissions.IsAdminUser]
 
@@ -185,7 +192,7 @@ class VendorApproveView(APIView):
             status=200
         )
 
-
+# Rejects a vendor profile on pending
 class VendorRejectView(APIView):
     permission_classes = [permissions.IsAdminUser]
 

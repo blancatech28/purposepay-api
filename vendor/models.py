@@ -4,61 +4,45 @@ from django.conf import settings
 
 
 class VendorProfile(models.Model):
-    """Stores the core identity info of the vendor."""
+    """ This model stores the core identity info of the vendor."""
 
     # Relationship to User (1:1)
-    user = models.OneToOneField(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
-        related_name='vendor_profile'
-    )
-
-
-    business_name = models.CharField(max_length=255, unique=True)
-
+    user = models.OneToOneField(settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,related_name='vendor_profile')
     
-    phone_number = models.CharField(
-        max_length=20,
-        help_text="Official business phone number.",
-        unique=True
-    )
+    business_name = models.CharField(max_length=255, unique=True)
+    
+    phone_number = models.CharField(max_length=20,
+                help_text="Official business phone number.",unique=True)
 
     # Country (hardcoded to Ghana for now)
-    country = models.CharField(
-        max_length=50,
-        default="Ghana",
-        editable=False,
-        help_text="Country where the vendor operates."
-    )
-
-    city = models.CharField(
-        max_length=100,
-        help_text="City or town in Ghana where the business is located."
-    )
+    country = models.CharField(max_length=50,default="Ghana",
+        editable=False,help_text="Country where the vendor operates.")
+    
+    city = models.CharField(max_length=100,
+        help_text="City or town in Ghana where the business is located.")
 
     business_address = models.CharField(
         max_length=255, default="Unknown Address",
         help_text="Physical business address (e.g., Ghana Post address)."
     )
-
     # GPS Code (e.g., Ghana Post GPS code)
-    gps_code = models.CharField(
-        max_length=20,
-        help_text="GPS code (e.g., GW-0062-1604). Must be provided."
-    )
+    gps_code = models.CharField(max_length=20,
+        help_text="GPS code (e.g., GW-0062-1604). Must be provided.")
 
     PHARMACY = "PHARMACY"
     SCHOOL = "SCHOOL"
     HARDWARE = "HARDWARE"
+    FOOD_AND_GROCERIES = "FOOD AND GROCERIES"
     OTHER = "OTHER"
 
     CATEGORY_CHOICES = [
         (PHARMACY, "Pharmacy"),
         (SCHOOL, "School"),
         (HARDWARE, "Hardware Store"),
+        (FOOD_AND_GROCERIES, "Food and Groceries"),
         (OTHER, "Other"),
     ]
-
     category = models.CharField(max_length=50, choices=CATEGORY_CHOICES, default=OTHER)
     
     def __str__(self):
@@ -69,18 +53,15 @@ class VendorProfile(models.Model):
         verbose_name_plural = 'Vendor Profiles'
 
 
-
 class VendorVerification(models.Model):
     """
     This model stores the verification documents and approval status for Vendors.
     """
-
     # Relationship to VendorProfile (1:1)
-    vendor = models.OneToOneField(
-        VendorProfile,
-        on_delete=models.CASCADE,
-        related_name='verification'
-    )
+    vendor = models.OneToOneField(VendorProfile,
+        on_delete=models.CASCADE,related_name='verification')
+
+
 #------------------------
     #Verification Documents
 #--------------------------
@@ -97,16 +78,12 @@ class VendorVerification(models.Model):
         (OTHER_ID, "Other ID"),
     ]
 
-    owner_id_type = models.CharField(
-        max_length=30,
+    owner_id_type = models.CharField(max_length=30,
         choices=OWNER_ID_CHOICES,
-        help_text="Type of ID submitted by business owner."
-    )
+        help_text="Type of ID submitted by business owner.")
 
-    owner_id_document = models.FileField(
-        upload_to="vendor_ids/",
-        help_text="Upload of Ghana Card, Passport, etc."
-    )
+    owner_id_document = models.FileField(upload_to="vendor_ids/",
+        help_text="Upload of Ghana Card, Passport, etc.")
 
     business_registration_document = models.FileField(
         upload_to="vendor_certificates/",
@@ -131,14 +108,10 @@ class VendorVerification(models.Model):
 
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=PENDING)
     admin_approved_date = models.DateTimeField(null=True, blank=True)
-    last_modified_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        null=True,
-        blank=True,
+    last_modified_by = models.ForeignKey(settings.AUTH_USER_MODEL,
+        null=True,blank=True,
         related_name="vendor_profiles_modified",
-        on_delete=models.SET_NULL,
-    )
-
+        on_delete=models.SET_NULL,)
 
     def __str__(self):
         return f"{self.vendor.business_name} ({self.status})"
@@ -150,7 +123,7 @@ class VendorVerification(models.Model):
 
 
 class VendorFinance(models.Model):
-    """Table for financial and payout-related info of Vendors."""
+    """Model for financial and payout-related info of Vendors."""
 
     # Relationship to VendorProfile (1:1)
     vendor = models.OneToOneField(
@@ -158,13 +131,9 @@ class VendorFinance(models.Model):
         on_delete=models.CASCADE,
         related_name='finance'
     )
-
-
     balance = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
     payout_account_number = models.CharField(max_length=50, unique=True)
     payout_bank_name = models.CharField(max_length=100)
-
-
 
     def __str__(self):
         return f"{self.vendor.business_name} - Balance: GH₵{self.balance}"
@@ -174,10 +143,8 @@ class VendorFinance(models.Model):
         verbose_name_plural = 'Vendor Finances'
 
 
-
 class VendorPayoutHistory(models.Model):
     """Records each payout made to a vendor."""
-
     vendor = models.ForeignKey(VendorProfile, on_delete=models.CASCADE, related_name='payout_history')
     amount = models.DecimalField(max_digits=12, decimal_places=2)
     created_at = models.DateTimeField(auto_now_add=True)

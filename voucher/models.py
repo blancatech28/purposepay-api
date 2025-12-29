@@ -10,7 +10,7 @@ from decimal import Decimal
 
 
 def generate_voucher_code():
-    """Generate a unique voucher code with the purposepay prefix as PP."""
+    """This function generates a unique voucher code with the purposepay prefix as PP."""
     characters = string.ascii_uppercase + string.digits
     code_length = 11
     unique_part = ''.join(secrets.choice(characters) for _ in range(code_length))
@@ -18,13 +18,12 @@ def generate_voucher_code():
 
 
 def default_expiry():
-    """Voucher expiry is set to 30 days from creation."""
+    """The voucher expiry is set to 30 days from creation."""
     return timezone.now() + timedelta(days=30)
 
 
 class Voucher(models.Model):
-    """Table to store details of voucher issued to customers."""
-
+    """This model stores details of voucher issued to customers."""
     PENDING = "PENDING"
     ACTIVE = "ACTIVE"
     LOCKED = "LOCKED"
@@ -49,18 +48,23 @@ class Voucher(models.Model):
     
     remaining_balance = models.DecimalField(max_digits=12, decimal_places=2, editable=False)
     
-    # Funds reserved to pay vendors during redemptions
+    # Funds reserved to pay vendors during after voucher redemption is confirmed
     escrow_balance = models.DecimalField(
-        max_digits=12, decimal_places=2, default=Decimal("0.00"), editable=False, help_text="Funds reserved to pay vendors"
+        max_digits=12, decimal_places=2, default=Decimal("0.00"), 
+        editable=False, help_text="Funds reserved to pay vendors"
     )
-    status = models.CharField(
-        max_length=20, choices=STATUS_CHOICES, default=PENDING)
+    status = models.CharField( max_length=20, choices=STATUS_CHOICES, default=PENDING)
     
-    expiry_date = models.DateTimeField(
-        default=default_expiry,null=True,blank=True
-    )
+    expiry_date = models.DateTimeField(default=default_expiry,null=True,blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
+    def update_status_if_expired(self):
+        """Updates the voucher status to EXPIRED if expiry date has passed."""
+        if self.expiry_date and self.expiry_date < timezone.now() and self.status not in [self.EXPIRED, self.LOCKED]:
+            self.status = self.EXPIRED
+            self.save(update_fields=["status"])
+
+    
     def save(self, *args, **kwargs):
         # The remaining balance is set to the initial amount on creation
         if not self.pk:
@@ -69,6 +73,7 @@ class Voucher(models.Model):
             # Escrow balance is also set to the initial amount when voucher is created
             self.escrow_balance = self.initial_amount
         super().save(*args, **kwargs)
+        self.update_status_if_expired()  
 
     def __str__(self):
         return f"{self.code} ({self.status})"
@@ -76,7 +81,7 @@ class Voucher(models.Model):
 
 
 class VoucherRedemption(models.Model):
-    """This table tracks all the voucher redemptions made by a vendor."""
+    """Model tracks all the voucher redemptions made by a vendor."""
     
     PENDING = "PENDING"
     REDEEMED = "REDEEMED"
@@ -87,19 +92,11 @@ class VoucherRedemption(models.Model):
         (REDEEMED, "Redeemed"),
         (CANCELLED, "Cancelled"),
     ]
-    voucher = models.ForeignKey(
-        Voucher,
-        on_delete=models.CASCADE,
-        related_name="redemptions"
-    )
-    vendor = models.ForeignKey(
-        VendorProfile,
-        on_delete=models.CASCADE,
-        related_name="voucher_redemptions"
-    )
+    voucher = models.ForeignKey(Voucher,on_delete=models.CASCADE,related_name="redemptions")
+
+    vendor = models.ForeignKey(VendorProfile,on_delete=models.CASCADE,related_name="voucher_redemptions")
     redeemed_amount = models.DecimalField(max_digits=12, decimal_places=2)
     redeemed_at = models.DateTimeField(auto_now_add=True)
-
     redemption_status = models.CharField(max_length=10, choices=STATUS_CHOICES, default=PENDING)
 
     class Meta:
@@ -111,7 +108,7 @@ class VoucherRedemption(models.Model):
     
 
 
-# A customer wallet to hold voucher balances
+# A customer wallet to hold money for voucher purchases
 class CustomerVoucherWallet(models.Model):
     customer = models.OneToOneField(settings.AUTH_USER_MODEL, 
                                     on_delete=models.CASCADE, related_name="wallet")

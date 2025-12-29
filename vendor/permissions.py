@@ -2,13 +2,13 @@ from rest_framework import permissions
 from .models import VendorVerification
 from rest_framework.exceptions import PermissionDenied
 
+
 class IsVendorOwner(permissions.BasePermission):
     """Allow access only to the vendor who owns the profile."""
 
     def has_object_permission(self, request, view, obj):
         # obj is the VendorProfile instance
         return obj.user == request.user
-
 
 
 class IsApprovedVendor(permissions.BasePermission):
@@ -19,7 +19,6 @@ class IsApprovedVendor(permissions.BasePermission):
     - have a vendor verification record
     - and is approved
     """
-
     def has_permission(self, request, view):
         user = request.user
 
@@ -43,8 +42,5 @@ class IsApprovedVendor(permissions.BasePermission):
 
         # The vendor verification status must be approved
         if verification.status != VendorVerification.APPROVED:
-            raise PermissionDenied(
-                "The Vendor is not approved yet."
-            )
-
+            raise PermissionDenied("The Vendor is not approved yet.")
         return True
