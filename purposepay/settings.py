@@ -109,8 +109,15 @@ DATABASES = {
         "PASSWORD": config('DB_PASSWORD'),
         "HOST": config('DB_HOST', default='localhost'),
         "PORT": config('DB_PORT', default='3306', cast=int),
+        
+        # test database
+        "TEST": {
+            "NAME": "test_purposepay_db",  
+        },
     }
 }
+
+
 
 # Password validation
 # https://docs.djangoproject.com/en/6.0/ref/settings/#auth-password-validators
