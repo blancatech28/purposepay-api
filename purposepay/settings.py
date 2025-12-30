@@ -145,6 +145,8 @@ SECURE_HSTS_SECONDS = 31536000
 SECURE_HSTS_INCLUDE_SUBDOMAINS = True
 SECURE_HSTS_PRELOAD = True
 
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
 # SECURITY HEADERS
 SECURE_BROWSER_XSS_FILTER = True  # XSS filter in browser
 X_FRAME_OPTIONS = 'DENY'          # Prevent clickjacking
@@ -159,8 +161,8 @@ AXES_COOLOFF_TIME = 1  # in hours
 CONTENT_SECURITY_POLICY = {
     'DIRECTIVES': {
         'default-src': ("'self'",),
-        'script-src': ("'self'",),
-        'style-src': ("'self'",),
+        'script-src': ("'self'","'unsafe-inline'"),
+        'style-src': ("'self'","'unsafe-inline'"),
         'img-src': ("'self'", "data:"),
     }
 }
