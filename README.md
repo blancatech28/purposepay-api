@@ -18,7 +18,7 @@ This project currently targets **Ghana** as the initial market but is designed t
 ## Live Production Access
 
 * **Base API URL:** `https://purposepayapi.duckdns.org`
-* **Detailed Testing Guide:** **[API_TESTING.md](https://www.google.com/search?q=./API_TESTING.md)**
+* **Detailed Testing Guide:** [API_TESTING.md](API_TESTING.md)
 
 ---
 
@@ -214,7 +214,7 @@ python manage.py runserver
 
 ## API Testing
 
-* **[API_TESTING.md](https://www.google.com/search?q=./API_TESTING.md)**: Detailed endpoint testing instructions
+* [API_TESTING.md](API_TESTING.md): Detailed endpoint testing instructions
 
 ---
 
@@ -284,7 +284,7 @@ ALLOWED_HOSTS=127.0.0.1,localhost
 * Business logic (balances, expiry, confirmations) explicitly tested
 * Postman collections provided for manual testing
 
-See **[API_TESTING.md](https://www.google.com/search?q=./API_TESTING.md)** for detailed testing flows.
+See [API_TESTING.md](API_TESTING.md) for detailed testing flows.
 
 ---
 
