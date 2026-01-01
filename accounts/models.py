@@ -64,6 +64,14 @@ class CustomUser(AbstractUser):
 
     def __str__(self):
         return self.email
+    
+    def save(self, *args, **kwargs):
+        # If is_vendor is True, force is_customer to False
+        if self.is_vendor:
+            self.is_customer = False
+        
+        super().save(*args, **kwargs)
+    
 
     class Meta:
         verbose_name = 'User'

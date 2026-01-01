@@ -32,7 +32,13 @@ class RegisterSerializer(serializers.ModelSerializer):
     def validate(self,data):
         is_vendor = data.get('is_vendor', False)
         is_customer = data.get('is_customer', False)
+
         validate_user_roles(is_vendor, is_customer)
+
+        """if vendor is true, force customer to false"""
+        if is_vendor and 'is_customer' not in data:
+            data['is_customer'] = False
+            
         return data
 
     def create(self, validated_data):
@@ -53,7 +59,7 @@ class LoginSerializer(serializers.Serializer):
         password = attrs.get('password')
 
         if email and password:
-            user = authenticate(email=email, password=password)
+            user = authenticate(request=self.context.get('request'), email=email, password=password)
             if not user:
                 raise serializers.ValidationError("Invalid email or password.")
             if not user.is_active:
@@ -61,7 +67,6 @@ class LoginSerializer(serializers.Serializer):
             attrs['user'] = user
             return attrs
         raise serializers.ValidationError("Email and password are required.")
-
 
 class UserSerializer(serializers.ModelSerializer):
     """Serializer for viewing user profile"""
