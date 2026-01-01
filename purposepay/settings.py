@@ -11,11 +11,6 @@ import os
 # Base directory
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# Paths for uploaded files
-PROFILE_PIC_DIR = os.path.join(BASE_DIR, 'profile_pics')
-VENDOR_ID_DIR = os.path.join(BASE_DIR, 'vendor_ids')
-VENDOR_CERT_DIR = os.path.join(BASE_DIR, 'vendor_certificates')
-VENDOR_LOCATION_DIR = os.path.join(BASE_DIR, 'vendor_locations')
 
 # SECURITY SETTINGS
 SECRET_KEY = config("SECRET_KEY")
@@ -152,9 +147,23 @@ SECURE_BROWSER_XSS_FILTER = True  # XSS filter in browser
 X_FRAME_OPTIONS = 'DENY'          # Prevent clickjacking
 SECURE_CONTENT_TYPE_NOSNIFF = True  # Prevent MIME type sniffing
 
-# AXES SETTINGS (brute-force protection)
+# AXES SETTINGS (Modern/Corrected version)
 AXES_FAILURE_LIMIT = 5
 AXES_COOLOFF_TIME = 1  # in hours
+AXES_ENABLE_ACCESS_FAILURE_LOG = True
+
+# This REPLACES 'AXES_LOCK_OUT_BY_COMBINATION_USER_AND_IP' and 'AXES_ONLY_USER_FAILURES'
+# and fixes the 'ip_address' security HINT.
+AXES_LOCKOUT_PARAMETERS = [["username", "ip_address"]]
+
+# This REPLACES 'AXES_PROXY_COUNT'
+AXES_NUM_PROXIES = 1
+
+# This REPLACES 'AXES_IP_LOOKUP_PARAMETERS' (Now expects a list)
+AXES_IP_LOOKUP_PARAMETERS = ["HTTP_X_FORWARDED_FOR"]
+
+AXES_HANDLER = 'axes.handlers.database.AxesDatabaseHandler'
+
 
 # CSP SETTINGS
 # CSP SETTINGS (updated for django-csp >=4.0)

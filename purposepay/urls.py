@@ -20,6 +20,7 @@ from django.urls import path, include
 from django.conf import settings
 from django.urls import re_path
 from django.views.static import serve
+from django.conf.urls.static import static
 
 urlpatterns = [
     # Admin panel
@@ -45,13 +46,5 @@ urlpatterns = [
 ] 
 
 
-
-
-# Serving static files for vendor-related documents
-urlpatterns += [
-      re_path(r'^profile_pics/(?P<path>.*)$', serve, {'document_root': settings.PROFILE_PIC_DIR}),
-    re_path(r'^vendor_ids/(?P<path>.*)$', serve, {'document_root': settings.VENDOR_ID_DIR}),
-    re_path(r'^vendor_certificates/(?P<path>.*)$', serve, {'document_root': settings.VENDOR_CERT_DIR}),
-    re_path(r'^vendor_locations/(?P<path>.*)$', serve, {'document_root': settings.VENDOR_LOCATION_DIR}),
-]
-
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
