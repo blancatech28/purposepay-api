@@ -23,8 +23,7 @@ class VendorProfile(models.Model):
         help_text="City or town in Ghana where the business is located.")
 
     business_address = models.CharField(
-        max_length=255, default="Unknown Address",
-        help_text="Physical business address (e.g., Ghana Post address)."
+        max_length=255,help_text="Physical business address (e.g., Ghana Post address)."
     )
     # GPS Code (e.g., Ghana Post GPS code)
     gps_code = models.CharField(max_length=20,

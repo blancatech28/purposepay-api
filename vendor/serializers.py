@@ -226,7 +226,7 @@ class VendorProfileUpdateSerializer(serializers.ModelSerializer):
         return validate_vendor_business_address(value)
 
     def validate_payout_account_number(self, value):
-        return validate_vendor_payout_account_number(value)
+        return validate_vendor_payout_account_number(value,instance=getattr(self.instance, 'finance', None))
 
 
     def validate_payout_bank_name(self, value):

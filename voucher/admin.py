@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Voucher, VoucherRedemption
+from .models import Voucher, VoucherRedemption, CustomerVoucherWallet
 
 # Voucher model Admin registration
 @admin.register(Voucher)
@@ -24,3 +24,13 @@ class VoucherRedemptionAdmin(admin.ModelAdmin):
     ordering = ("-redeemed_at",)
 
     readonly_fields = ("voucher","vendor","redeemed_amount","redemption_status","redeemed_at",)
+
+
+# Register CustomerVoucherWallet model in admin
+@admin.register(CustomerVoucherWallet)
+class CustomerVoucherWalletAdmin(admin.ModelAdmin):
+    """Admin interface for customer wallet balances."""
+    list_display = ("customer__username", "customer__email", "balance")
+    search_fields = ("customer__username", "customer__email")
+    ordering = ("-balance",)
+    fields = ("customer", "balance")
