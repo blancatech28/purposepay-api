@@ -2,7 +2,7 @@
 
 # PurposePay API Testing Guide
 
-This document outlines the standard procedures for testing the PurposePay API. It is designed to guide developers through the complete lifecycle of the application: from User Registration and Vendor Approval to Voucher Creation and the Escrow Redemption flow.
+This document outlines the standard procedures for testing the PurposePay API. It is designed to guide developers through the complete lifecycle of the application.
 
 ---
 
@@ -335,3 +335,4 @@ Now that the vendor has been paid, they can withdraw funds to their bank.
 22. [ ] **Unexpected Inputs:** Special characters in inputs are handled gracefully.
 
 ---
+
